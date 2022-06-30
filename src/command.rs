@@ -1,6 +1,7 @@
 pub enum Command {
     Quit,
     None,
+    ExitEditor,
 }
 
 impl Command {

@@ -2,10 +2,13 @@
 
 cargo fmt
 cargo clippy &&
-RUST_BACKTRACE=1 cargo build && touch run_me || 
+RUST_BACKTRACE=1 cargo build && {
+    killall rspread
+    touch run_me
+ } || 
     echo --------------------------------------------------------------------------------
 
-inotifywait -q -e close_write src Cargo.toml run.sh
+inotifywait -q -e close_write src Cargo.toml run.sh run2.sh
 clear
 
 exec ./run.sh
