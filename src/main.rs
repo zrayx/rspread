@@ -1,5 +1,4 @@
 use rzdb::Db;
-use std::io::stdout;
 // use termion;
 // use termion::event::Key;
 // use termion::input::TermRead;
@@ -7,20 +6,31 @@ use std::io::stdout;
 #[allow(unused_imports)]
 use termion::raw::IntoRawMode;
 
+mod command;
+mod cursor;
+mod input;
 mod render;
-use crate::render::render;
 
+use crate::input::input;
 fn main() {
     let table_name = "test1";
     let mut db = Db::create("basic", "./db");
     db.create_table(table_name);
-    db.create_column(table_name, "name");
-    db.create_column(table_name, "value");
-    db.insert(table_name, vec!["hello", "world"]);
-    db.insert(table_name, vec!["bon jour", "le monde"]);
-    db.insert(table_name, vec!["你好", "世界"]); // no proper display of double width unicode characters
+    db.create_column(table_name, "date");
+    db.create_column(table_name, "topic");
+    db.insert(table_name, vec!["2022.06.30", "navigate with cursor"]);
+    db.insert(table_name, vec!["2022.06.30", "edit"]);
 
-    // let stdin = stdin();
-    let mut stdout = stdout().into_raw_mode().unwrap();
-    render(&mut stdout, &db, table_name);
+    // process input
+    let mut cursor = cursor::Cursor::new(1, 1);
+    let mut command = command::Command::new();
+    loop {
+        render::render(&db, table_name, &cursor);
+        input(&mut db, &mut cursor, &mut command);
+        match command {
+            command::Command::Quit => break,
+            command::Command::None => {}
+        }
+    }
+    render::cleanup();
 }

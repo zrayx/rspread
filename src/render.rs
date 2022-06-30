@@ -1,15 +1,19 @@
 use rzdb::Db;
-use termion::color::{Bg, Black, Fg, Green, Red, Reset, White};
 use termion::cursor::Goto;
+use termion::raw::IntoRawMode;
+#[allow(unused_imports)]
 use termion::raw::RawTerminal;
 
-use std::io::Write;
-// use termion;
-// use termion::event::Key;
-// use termion::input::TermRead;
-//use termion::color::{Bg, Black, Blue, Cyan, Fg, Green, Magenta, Red, White, Yellow};
+use std::io::{stdout, Write};
 
-pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &str) {
+use crate::cursor::Cursor;
+use termion::color::{Bg, Fg, Reset};
+#[allow(unused_imports)]
+use termion::color::{Black, Blue, Cyan, Green, Magenta, Red, White, Yellow};
+
+pub fn render(db: &Db, table_name: &str, cursor: &Cursor) {
+    let mut stdout = stdout().into_raw_mode().unwrap();
+
     let pad = |s: &str, width: u16| {
         let mut s = s.to_string();
         while (s.len() as u16) < width {
@@ -27,15 +31,16 @@ pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &s
 
     let mut out = String::new();
 
-    out += &format!("{}", termion::clear::All);
+    out += &format!("{}{}", termion::cursor::Hide, termion::clear::All);
 
     // status line
+    let line = format!("Table: {}, Cur: ({},{})", table_name, cursor.x, cursor.y);
     out += &format!(
-        "{}{}{}Table: {}{}",
-        Fg(White),
+        "{}{}{}{}{}",
+        Fg(Black),
         Bg(Green),
         Goto(1, terminal_height - 2),
-        pad(&db.get_name(), terminal_width - 1 - "Table: ".len() as u16),
+        pad(&line, terminal_width - 1 - line.len() as u16),
         Bg(Black),
     );
 
@@ -67,7 +72,11 @@ pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &s
     for (idx, column_name) in column_names.iter().enumerate() {
         line += &pad(column_name, column_widths[idx] + 1);
     }
-    line += &" ".repeat(terminal_width as usize - line.len());
+    if line.len() > terminal_width as usize {
+        line = line[..terminal_width as usize].to_string();
+    } else {
+        line += &" ".repeat(terminal_width as usize - line.len());
+    }
     out += &line;
     out += &format!("{}{}", Fg(Reset), Bg(Reset));
 
@@ -83,6 +92,9 @@ pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &s
         );
         // columns
         for (idx_x, column) in row.iter().enumerate() {
+            if idx_x == cursor.x as usize - 1 && idx_y == cursor.y as usize - 1 {
+                out += &format!("{}{}", Fg(Black), Bg(Yellow));
+            }
             out += &format!(
                 "{}{}",
                 Goto(
@@ -91,6 +103,9 @@ pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &s
                 ),
                 column
             );
+            if idx_x == cursor.x as usize - 1 && idx_y == cursor.y as usize - 1 {
+                out += &format!("{}{}", Fg(Reset), Bg(Reset));
+            }
         }
     }
 
@@ -99,4 +114,11 @@ pub fn render(stdout: &mut RawTerminal<std::io::Stdout>, db: &Db, table_name: &s
 
     // output everything
     write!(stdout, "{}", out).unwrap();
+    stdout.flush().unwrap();
+}
+
+pub fn cleanup() {
+    let mut stdout = stdout().into_raw_mode().unwrap();
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
+    stdout.flush().unwrap();
 }
