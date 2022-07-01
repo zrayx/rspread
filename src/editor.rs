@@ -11,11 +11,6 @@ impl Editor {
         }
     }
 
-    pub fn add(&mut self, ch: char) {
-        self.line.insert(self.cur_x, ch);
-        self.cur_x += 1;
-    }
-
     pub fn left(&mut self) {
         if self.cur_x > 0 {
             self.cur_x -= 1;
@@ -26,6 +21,16 @@ impl Editor {
         if self.cur_x < self.line.len() {
             self.cur_x += 1;
         }
+    }
+
+    pub fn add(&mut self, ch: char) {
+        self.line.insert(self.cur_x, ch);
+        self.cur_x += 1;
+    }
+
+    pub fn clear(&mut self) {
+        self.line.clear();
+        self.cur_x = 0;
     }
 
     pub fn backspace(&mut self) {

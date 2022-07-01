@@ -1,5 +1,5 @@
-use rzdb::Db;
 use std::io::{stdout, Write};
+
 use termion::color::{Bg, Fg, Reset};
 #[allow(unused_imports)]
 use termion::color::{Black, Blue, Cyan, Green, Magenta, Red, White, Yellow};
@@ -7,6 +7,8 @@ use termion::cursor::Goto;
 use termion::raw::IntoRawMode;
 #[allow(unused_imports)]
 use termion::raw::RawTerminal;
+
+use rzdb::Db;
 
 use crate::cursor::Cursor;
 use crate::editor::Editor;
@@ -48,7 +50,7 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
     // if the cursor is right of the right most column, append more columns (for display only)
     let len = column_names.len();
     for idx in len..(cursor.x) {
-        let new_column = format!("Column {}", idx);
+        let new_column = format!("Column {}", idx + 1);
         column_names.push(new_column);
     }
 
@@ -116,13 +118,14 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
                 if idx_x == cursor.x - 1 && idx_y == cursor.y - 1 {
                     out += &format!("{}{}", Fg(Black), Bg(White));
                 }
+                let data = column.to_string();
                 out += &format!(
                     "{}{}",
                     Goto(
                         (column_pos[idx_x] + offset_left) as u16,
                         (offset_top + idx_y + 2) as u16
                     ),
-                    column
+                    pad(&data, column_widths[idx_x] + 1),
                 );
                 if idx_x == cursor.x - 1 && idx_y == cursor.y - 1 {
                     out += &format!("{}{}", Fg(Reset), Bg(Reset));

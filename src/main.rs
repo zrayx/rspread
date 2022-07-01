@@ -1,4 +1,4 @@
-use rzdb::Db;
+use rzdb::{Data, Db};
 
 mod command;
 mod cursor;
@@ -8,6 +8,7 @@ mod mode;
 mod render;
 
 use crate::input::input;
+
 fn main() {
     let table_name = "test1";
     let mut db = Db::create("basic", "./db");
@@ -35,6 +36,13 @@ fn main() {
         table_name,
         vec!["2022.06.30", "terminal doesn't use all rows and columns"],
     );
+    db.insert(
+        table_name,
+        vec![
+            "2022.06.30",
+            "rzdb: set_active(), and remove table_name from commands",
+        ],
+    );
 
     // process input
     let mut cursor = cursor::Cursor::new(1, 1);
@@ -56,8 +64,46 @@ fn main() {
             command::Command::None => {}
             command::Command::ExitEditor => {
                 mode = mode::Mode::Normal;
+                exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
             }
         }
     }
     render::cleanup();
+}
+
+fn extend_table(
+    db: &mut Db,
+    table_name: &str,
+    new_row_count: usize,
+    new_column_count: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let old_row_count = db.row_count(table_name);
+    let old_column_count = db.column_count(table_name);
+    for idx in old_column_count..new_column_count {
+        db.create_column(table_name, &format!("Column {}", idx + 1));
+    }
+    for _ in old_row_count..new_row_count {
+        let column_count = new_column_count.max(old_column_count);
+        db.insert(table_name, vec![""; column_count]);
+    }
+    Ok(())
+}
+
+fn exit_editor(
+    db: &mut Db,
+    table_name: &str,
+    mode: &mut mode::Mode,
+    cursor: &mut cursor::Cursor,
+    editor: &mut editor::Editor,
+) -> Result<(), Box<dyn std::error::Error>> {
+    extend_table(db, table_name, cursor.y, cursor.x)?;
+    db.set_at(
+        table_name,
+        cursor.y - 1,
+        cursor.x - 1,
+        Data::parse(&editor.line),
+    )?;
+    editor.clear();
+    *mode = mode::Mode::Normal;
+    Ok(())
 }

@@ -28,7 +28,7 @@ pub fn input(
 ) {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
-
+    *command = Command::None;
     //let c = stdin.keys().next().unwrap();
     if let Some(c) = stdin.keys().next() {
         match mode.clone() {
