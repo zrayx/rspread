@@ -8,7 +8,7 @@ RUST_BACKTRACE=1 cargo build && {
  } || 
     echo --------------------------------------------------------------------------------
 
-inotifywait -q -e close_write src Cargo.toml run.sh run2.sh
+inotifywait -q -e close_write src ../rzdb/src Cargo.toml run.sh run2.sh
 clear
 
 exec ./run.sh

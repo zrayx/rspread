@@ -11,38 +11,38 @@ use crate::input::input;
 
 fn main() {
     let table_name = "test1";
-    let mut db = Db::create("basic", "./db");
-    db.create_table(table_name);
-    db.create_column(table_name, "date");
-    db.create_column(table_name, "topic");
-    db.insert(table_name, vec!["2022.06.30", "navigate with cursor"]);
-    db.insert(table_name, vec!["2022.06.30", "edit"]);
-    db.insert(
-        table_name,
-        vec![
-            "2022.06.30",
-            "render the text white, the cursor black on white (editor is black on yellow)",
-        ],
-    );
-    db.insert(
-        table_name,
-        vec![
-            "2022.06.30",
-            "render the cursor, row numbers and column names when the cursor is on empty cells",
-        ],
-    );
-    db.insert(table_name, vec!["2022.06.30", "line editor"]);
-    db.insert(
-        table_name,
-        vec!["2022.06.30", "terminal doesn't use all rows and columns"],
-    );
-    db.insert(
-        table_name,
-        vec![
-            "2022.06.30",
-            "rzdb: set_active(), and remove table_name from commands",
-        ],
-    );
+    let mut db = if let Ok(db) = Db::load("rspread", "./db") {
+        db
+    } else {
+        Db::create("rspread", "./db").unwrap()
+    };
+    if !db.exists(table_name) {
+        db.create_table(table_name);
+        db.create_column(table_name, "date");
+        db.create_column(table_name, "topic");
+        db.insert(table_name, vec!["2022.06.30", "navigate with cursor"]);
+        db.insert(table_name, vec!["2022.06.30", "edit"]);
+        db.insert(
+            table_name,
+            vec![
+                "2022.06.30",
+                "render the text white, the cursor black on white (editor is black on yellow)",
+            ],
+        );
+        db.insert(
+            table_name,
+            vec![
+                "2022.06.30",
+                "render the cursor, row numbers and column names when the cursor is on empty cells",
+            ],
+        );
+        db.insert(table_name, vec!["2022.06.30", "line editor"]);
+        db.insert(
+            table_name,
+            vec!["2022.06.30", "terminal doesn't use all rows and columns"],
+        );
+        db.insert(table_name, vec!["2022.07.01", "rzdb: load and save"]);
+    };
 
     // process input
     let mut cursor = cursor::Cursor::new(1, 1);
@@ -67,6 +67,7 @@ fn main() {
                 exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
             }
         }
+        db.save().unwrap();
     }
     render::cleanup();
 }
