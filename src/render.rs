@@ -37,7 +37,10 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
     out += &format!("{}{}", termion::cursor::Hide, termion::clear::All);
 
     // status line
-    let line = format!("Table: {}, Cur: ({},{})", table_name, cursor.x, cursor.y);
+    let line = format!(
+        "Table: {}, Cur: ({},{}), {}",
+        table_name, cursor.x, cursor.y, mode
+    );
     out += &format!(
         "{}{}{}{}{}",
         Fg(Black),

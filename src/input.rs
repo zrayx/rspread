@@ -19,7 +19,7 @@ fn move_cursor(cursor: &mut Cursor, dx: i16, dy: i16) {
 
 #[allow(unused_variables)]
 pub fn input(
-    db: &mut rzdb::Db,
+    db: &rzdb::Db,
     table_name: &str,
     cursor: &mut Cursor,
     command: &mut Command,
@@ -34,6 +34,7 @@ pub fn input(
         match mode.clone() {
             Mode::Normal => match c.unwrap() {
                 Key::Char('q') => *command = Command::Quit,
+
                 Key::Char('j') => move_cursor(cursor, 0, 1),
                 Key::Char('k') => move_cursor(cursor, 0, -1),
                 Key::Char('h') => move_cursor(cursor, -1, 0),
@@ -42,7 +43,14 @@ pub fn input(
                 Key::Char('$') => cursor.x = db.get_column_names(table_name).len(),
                 Key::Char('g') => cursor.y = 1,
                 Key::Char('G') => cursor.y = db.select_from(table_name).len(),
+
+                Key::Char('.') => *command = Command::InsertToday,
+                Key::Char('I') => *command = Command::InsertColumn,
+                Key::Char('O') => *command = Command::InsertRowAbove,
+                Key::Char('o') => *command = Command::InsertRowBelow,
+
                 Key::Char('i') => *mode = Mode::Insert,
+                Key::Char('d') => *mode = Mode::Delete,
 
                 Key::Char(c) => println!("{}", c),
                 Key::Alt(c) => println!("^{}", c),
@@ -55,6 +63,7 @@ pub fn input(
                 Key::Backspace => println!("×"),
                 _ => {}
             },
+
             Mode::Insert => match c.unwrap() {
                 Key::Esc => {
                     *command = Command::ExitEditor;
@@ -67,6 +76,15 @@ pub fn input(
                 Key::Delete => editor.delete(),
                 _ => {}
             },
+
+            Mode::Delete => {
+                match c.unwrap() {
+                    Key::Char('d') => *command = Command::DeleteLine,
+                    Key::Char('c') => *command = Command::DeleteColumn,
+                    _ => {}
+                }
+                *mode = Mode::Normal;
+            }
         }
     }
 

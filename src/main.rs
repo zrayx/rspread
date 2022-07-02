@@ -1,4 +1,4 @@
-use rzdb::{Data, Db};
+use rzdb::{time::Date, Data, Db};
 
 mod command;
 mod cursor;
@@ -7,10 +7,11 @@ mod input;
 mod mode;
 mod render;
 
+use crate::command::Command;
 use crate::input::input;
 
 fn main() {
-    let table_name = "test1";
+    let table_name = "todo";
     let mut db = if let Ok(db) = Db::load("rspread", "./db") {
         db
     } else {
@@ -46,13 +47,13 @@ fn main() {
 
     // process input
     let mut cursor = cursor::Cursor::new(1, 1);
-    let mut command = command::Command::new();
+    let mut command = Command::new();
     let mut mode = mode::Mode::new();
     let mut editor = editor::Editor::new();
     loop {
         render::render(&db, table_name, &cursor, &mode, &editor);
         input(
-            &mut db,
+            &db,
             table_name,
             &mut cursor,
             &mut command,
@@ -60,11 +61,56 @@ fn main() {
             &mut editor,
         );
         match command {
-            command::Command::Quit => break,
-            command::Command::None => {}
-            command::Command::ExitEditor => {
+            Command::Quit => break,
+            Command::None => {}
+            Command::ExitEditor => {
                 mode = mode::Mode::Normal;
                 exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+            }
+            Command::InsertToday => {
+                if db.get_row_count(table_name) < cursor.y {
+                    let column_count = db.get_column_count(table_name);
+                    db.insert(table_name, vec![""; column_count]);
+                }
+                db.set_at(
+                    table_name,
+                    cursor.y - 1,
+                    cursor.x - 1,
+                    Data::parse(&Date::today().to_string()),
+                )
+                .unwrap();
+            }
+            Command::InsertColumn => {
+                let mut column_count = db.get_column_count(table_name);
+                while (column_count < cursor.x) {
+                    db.create_column(table_name, &format!("Column {}", column_count));
+                    column_count += 1;
+                }
+                db.insert_column_at(table_name, &format!("Column {}", cursor.x), cursor.x - 1);
+            }
+            Command::InsertRowAbove => {
+                let mut row_count = db.get_row_count(table_name);
+                let column_count = db.get_column_count(table_name);
+                while (row_count < cursor.y) {
+                    db.insert(table_name, vec![""; column_count]);
+                    row_count += 1;
+                }
+                db.insert_row_at(table_name, cursor.y - 1);
+            }
+            Command::InsertRowBelow => {
+                let mut row_count = db.get_row_count(table_name);
+                let column_count = db.get_column_count(table_name);
+                while (row_count < cursor.y) {
+                    db.insert(table_name, vec![""; column_count]);
+                    row_count += 1;
+                }
+                db.insert_row_at(table_name, cursor.y);
+            }
+            Command::DeleteLine => {
+                db.delete_row(table_name, cursor.y - 1);
+            }
+            Command::DeleteColumn => {
+                db.delete_column(table_name, &db.get_column_names(table_name)[cursor.x - 1]);
             }
         }
         db.save().unwrap();
@@ -78,8 +124,8 @@ fn extend_table(
     new_row_count: usize,
     new_column_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let old_row_count = db.row_count(table_name);
-    let old_column_count = db.column_count(table_name);
+    let old_row_count = db.get_row_count(table_name);
+    let old_column_count = db.get_column_count(table_name);
     for idx in old_column_count..new_column_count {
         db.create_column(table_name, &format!("Column {}", idx + 1));
     }

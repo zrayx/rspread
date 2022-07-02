@@ -1,6 +1,12 @@
 pub enum Command {
     Quit,
     None,
+    InsertToday,
+    InsertColumn,
+    InsertRowAbove,
+    InsertRowBelow,
+    DeleteLine,
+    DeleteColumn,
     ExitEditor,
 }
 
