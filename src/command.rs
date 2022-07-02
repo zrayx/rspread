@@ -1,13 +1,23 @@
 pub enum Command {
     Quit,
     None,
+    ExitEditor,
+
+    InsertStart,
+    InsertEnd,
+    ChangeCell,
+    DeleteCell,
+
     InsertToday,
+
     InsertColumn,
     InsertRowAbove,
     InsertRowBelow,
     DeleteLine,
     DeleteColumn,
-    ExitEditor,
+
+    YankCell,
+    PasteCell,
 }
 
 impl Command {

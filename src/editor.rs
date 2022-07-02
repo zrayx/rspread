@@ -40,6 +40,18 @@ impl Editor {
         }
     }
 
+    pub fn insert_at(&mut self, old_text: &str, idx: usize) {
+        self.line.clear();
+        self.line.push_str(old_text);
+        self.cur_x = idx;
+    }
+
+    pub fn insert_end(&mut self, old_text: &str) {
+        self.line.clear();
+        self.line.push_str(old_text);
+        self.cur_x = old_text.len();
+    }
+
     pub fn delete(&mut self) {
         self.line.remove(self.cur_x);
     }

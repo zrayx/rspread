@@ -22,29 +22,10 @@ fn main() {
         db.create_column(table_name, "date");
         db.create_column(table_name, "topic");
         db.insert(table_name, vec!["2022.06.30", "navigate with cursor"]);
-        db.insert(table_name, vec!["2022.06.30", "edit"]);
-        db.insert(
-            table_name,
-            vec![
-                "2022.06.30",
-                "render the text white, the cursor black on white (editor is black on yellow)",
-            ],
-        );
-        db.insert(
-            table_name,
-            vec![
-                "2022.06.30",
-                "render the cursor, row numbers and column names when the cursor is on empty cells",
-            ],
-        );
-        db.insert(table_name, vec!["2022.06.30", "line editor"]);
-        db.insert(
-            table_name,
-            vec!["2022.06.30", "terminal doesn't use all rows and columns"],
-        );
-        db.insert(table_name, vec!["2022.07.01", "rzdb: load and save"]);
     };
 
+    // copy & paste
+    let mut copy_buffer = Data::Empty;
     // process input
     let mut cursor = cursor::Cursor::new(1, 1);
     let mut command = Command::new();
@@ -63,6 +44,32 @@ fn main() {
         match command {
             Command::Quit => break,
             Command::None => {}
+            Command::InsertStart => {
+                mode = mode::Mode::Insert;
+                let old_text = if is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
+                    db.select_at(table_name, cursor.x - 1, cursor.y - 1)
+                        .to_string()
+                } else {
+                    "".to_string()
+                };
+
+                editor.insert_at(&old_text.to_string(), 0);
+            }
+            Command::InsertEnd => {
+                mode = mode::Mode::Insert;
+                let old_text = if is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
+                    db.select_at(table_name, cursor.x - 1, cursor.y - 1)
+                        .to_string()
+                } else {
+                    "".to_string()
+                };
+
+                editor.insert_end(&old_text.to_string());
+            }
+            Command::ChangeCell => {
+                mode = mode::Mode::Insert;
+                editor.insert_at("", 0);
+            }
             Command::ExitEditor => {
                 mode = mode::Mode::Normal;
                 exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
@@ -82,35 +89,50 @@ fn main() {
             }
             Command::InsertColumn => {
                 let mut column_count = db.get_column_count(table_name);
-                while (column_count < cursor.x) {
+                while column_count < cursor.x {
                     db.create_column(table_name, &format!("Column {}", column_count));
                     column_count += 1;
                 }
                 db.insert_column_at(table_name, &format!("Column {}", cursor.x), cursor.x - 1);
             }
             Command::InsertRowAbove => {
-                let mut row_count = db.get_row_count(table_name);
-                let column_count = db.get_column_count(table_name);
-                while (row_count < cursor.y) {
-                    db.insert(table_name, vec![""; column_count]);
-                    row_count += 1;
+                if is_cell(&db, table_name, 0, cursor.y - 1) {
+                    db.insert_row_at(table_name, cursor.y - 1);
                 }
-                db.insert_row_at(table_name, cursor.y - 1);
             }
             Command::InsertRowBelow => {
-                let mut row_count = db.get_row_count(table_name);
-                let column_count = db.get_column_count(table_name);
-                while (row_count < cursor.y) {
-                    db.insert(table_name, vec![""; column_count]);
-                    row_count += 1;
+                if is_cell(&db, table_name, 0, cursor.y) {
+                    db.insert_row_at(table_name, cursor.y);
                 }
-                db.insert_row_at(table_name, cursor.y);
+                cursor.y += 1;
+            }
+            Command::DeleteCell => {
+                if is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
+                    db.set_at(table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
+                        .unwrap();
+                }
             }
             Command::DeleteLine => {
-                db.delete_row(table_name, cursor.y - 1);
+                if is_cell(&db, table_name, 0, cursor.y - 1) {
+                    db.delete_row_at(table_name, cursor.y - 1);
+                }
             }
             Command::DeleteColumn => {
-                db.delete_column(table_name, &db.get_column_names(table_name)[cursor.x - 1]);
+                if is_cell(&db, table_name, cursor.x - 1, 0) {
+                    db.delete_column(table_name, &db.get_column_names(table_name)[cursor.x - 1]);
+                }
+            }
+            Command::YankCell => {
+                copy_buffer = if is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
+                    db.select_at(table_name, cursor.x - 1, cursor.y - 1)
+                } else {
+                    Data::Empty
+                };
+            }
+            Command::PasteCell => {
+                extend_table(&mut db, table_name, cursor.x, cursor.y).unwrap();
+                db.set_at(table_name, cursor.y - 1, cursor.x - 1, copy_buffer.clone())
+                    .unwrap();
             }
         }
         db.save().unwrap();
@@ -118,11 +140,15 @@ fn main() {
     render::cleanup();
 }
 
+fn is_cell(db: &Db, table_name: &str, x: usize, y: usize) -> bool {
+    x < db.get_column_count(table_name) && y < db.get_row_count(table_name)
+}
+
 fn extend_table(
     db: &mut Db,
     table_name: &str,
-    new_row_count: usize,
     new_column_count: usize,
+    new_row_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let old_row_count = db.get_row_count(table_name);
     let old_column_count = db.get_column_count(table_name);
@@ -143,7 +169,7 @@ fn exit_editor(
     cursor: &mut cursor::Cursor,
     editor: &mut editor::Editor,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    extend_table(db, table_name, cursor.y, cursor.x)?;
+    extend_table(db, table_name, cursor.x, cursor.y)?;
     db.set_at(
         table_name,
         cursor.y - 1,

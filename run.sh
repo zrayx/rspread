@@ -1,5 +1,7 @@
 #!/bin/bash
 
+clear
+
 cargo fmt
 cargo clippy &&
 RUST_BACKTRACE=1 cargo build && {
@@ -9,6 +11,5 @@ RUST_BACKTRACE=1 cargo build && {
     echo --------------------------------------------------------------------------------
 
 inotifywait -q -e close_write src ../rzdb/src Cargo.toml run.sh run2.sh
-clear
 
 exec ./run.sh
