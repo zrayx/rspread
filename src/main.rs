@@ -8,21 +8,22 @@ mod input;
 mod mode;
 mod render;
 
-use crate::command::Command;
-use crate::input::input;
+use command::Command;
+use input::input;
+use mode::Mode;
 
 fn main() {
-    let table_name = "todo";
+    let mut table_name = "todo".to_string();
     let mut db = if let Ok(db) = Db::load("rspread", "./db") {
         db
     } else {
         Db::create("rspread", "./db").unwrap()
     };
-    if !db.exists(table_name) {
-        db.create_table(table_name).unwrap();
-        db.create_column(table_name, "date").unwrap();
-        db.create_column(table_name, "topic").unwrap();
-        db.insert(table_name, vec!["2022.06.30", "navigate with cursor"])
+    if !db.exists(&table_name) {
+        db.create_table(&table_name).unwrap();
+        db.create_column(&table_name, "date").unwrap();
+        db.create_column(&table_name, "topic").unwrap();
+        db.insert(&table_name, vec!["2022.06.30", "navigate with cursor"])
             .unwrap();
     };
 
@@ -31,56 +32,79 @@ fn main() {
     // process input
     let mut cursor = cursor::Cursor::new(1, 1);
     let mut command = Command::new();
-    let mut mode = mode::Mode::new();
+    let mut mode = Mode::new();
     let mut editor = editor::Editor::new();
+    let mut message = String::new();
     loop {
-        render::render(&db, table_name, &cursor, &mode, &editor);
+        render::render(&db, &table_name, &cursor, &mode, &editor, &message);
         input(
             &db,
-            table_name,
+            &table_name,
             &mut cursor,
             &mut command,
             &mut mode,
             &mut editor,
+            &mut message,
         );
         match command {
             Command::Quit => break,
             Command::None => {}
             Command::InsertStart => {
-                mode = mode::Mode::Insert;
-                enter_editor(&db, table_name, &cursor, &mut editor, 0);
+                mode = Mode::Insert;
+                editor_enter(&db, &table_name, &cursor, &mut editor, 0);
             }
             Command::InsertEnd => {
-                mode = mode::Mode::Insert;
-                enter_editor(&db, table_name, &cursor, &mut editor, -1);
+                mode = Mode::Insert;
+                editor_enter(&db, &table_name, &cursor, &mut editor, -1);
             }
             Command::ChangeCell => {
-                mode = mode::Mode::Insert;
+                mode = Mode::Insert;
                 editor.insert_at("", 0);
             }
-            Command::ExitEditor => {
-                mode = mode::Mode::Normal;
-                exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+            Command::EditorExit => {
+                mode = Mode::Normal;
+                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
             }
-            Command::ExitEditorRight => {
-                mode = mode::Mode::Normal;
-                exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+            Command::EditorExitRight => {
+                mode = Mode::Normal;
+                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
                 cursor.x += 1;
             }
-            Command::ExitEditorDown => {
-                mode = mode::Mode::Normal;
-                exit_editor(&mut db, table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+            Command::EditorExitDown => {
+                mode = Mode::Normal;
+                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
                 cursor.y += 1;
+            }
+            Command::CommandLineEnter => {
+                mode = Mode::Command;
+            }
+            Command::CommandLineExit => {
+                let line = editor.get_line();
+                let mut args = line.split_whitespace();
+                if let Some(command) = args.next() {
+                    if let Some(arg1) = args.next() {
+                        if command == "e" {
+                            // set table_name to new arg
+                            table_name = arg1.to_string();
+                            if !db.exists(&table_name) {
+                                db.create_table(&table_name).unwrap();
+                            }
+                            editor.clear();
+                            cursor = cursor::Cursor::new(1, 1);
+                        }
+                    }
+                }
+                mode = Mode::Normal;
             }
 
             Command::InsertToday => {
                 if cursor.y > 0 {
-                    if db.get_row_count(table_name).unwrap() < cursor.y {
-                        let column_count = db.get_column_count(table_name).unwrap();
-                        db.insert(table_name, vec![""; column_count]).unwrap();
+                    if db.get_row_count(&table_name).unwrap() < cursor.y {
+                        let column_count = db.get_column_count(&table_name).unwrap();
+                        db.insert(&table_name, vec![""; column_count]).unwrap();
                     }
                     db.set_at(
-                        table_name,
+                        &table_name,
                         cursor.y - 1,
                         cursor.x - 1,
                         Data::parse(&Date::today().to_string()),
@@ -89,57 +113,57 @@ fn main() {
                 }
             }
             Command::InsertColumn => {
-                let mut column_count = db.get_column_count(table_name).unwrap();
+                let mut column_count = db.get_column_count(&table_name).unwrap();
                 while column_count < cursor.x {
                     db.create_column(
-                        table_name,
-                        &common::generate_column_name(&db, table_name, column_count),
+                        &table_name,
+                        &common::generate_column_name(&db, &table_name, column_count),
                     )
                     .unwrap();
                     column_count += 1;
                 }
                 db.insert_column_at(
-                    table_name,
-                    &common::generate_column_name(&db, table_name, cursor.x),
+                    &table_name,
+                    &common::generate_column_name(&db, &table_name, cursor.x),
                     cursor.x - 1,
                 )
                 .unwrap();
             }
             Command::InsertRowAbove => {
-                if cursor.y > 0 && common::is_cell(&db, table_name, 0, cursor.y - 1) {
-                    db.insert_row_at(table_name, cursor.y - 1).unwrap();
+                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y - 1) {
+                    db.insert_row_at(&table_name, cursor.y - 1).unwrap();
                 }
             }
             Command::InsertRowBelow => {
-                if cursor.y > 0 && common::is_cell(&db, table_name, 0, cursor.y) {
-                    db.insert_row_at(table_name, cursor.y).unwrap();
+                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y) {
+                    db.insert_row_at(&table_name, cursor.y).unwrap();
                 }
                 cursor.y += 1;
             }
             Command::DeleteCell => {
                 if cursor.y > 0 {
-                    if common::is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
-                        db.set_at(table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
+                    if common::is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
+                        db.set_at(&table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
                             .unwrap();
                     }
                 } else {
-                    let old_column_name = db.get_column_name_at(table_name, cursor.x - 1).unwrap();
+                    let old_column_name = db.get_column_name_at(&table_name, cursor.x - 1).unwrap();
                     let generic_column_name =
-                        common::generate_column_name(&db, table_name, cursor.x - 1);
-                    db.rename_column(table_name, &old_column_name, &generic_column_name)
+                        common::generate_column_name(&db, &table_name, cursor.x - 1);
+                    db.rename_column(&table_name, &old_column_name, &generic_column_name)
                         .unwrap();
                 }
             }
             Command::DeleteLine => {
-                if cursor.y > 0 && common::is_cell(&db, table_name, 0, cursor.y - 1) {
-                    db.delete_row_at(table_name, cursor.y - 1).unwrap();
+                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y - 1) {
+                    db.delete_row_at(&table_name, cursor.y - 1).unwrap();
                 }
             }
             Command::DeleteColumn => {
-                if common::is_cell(&db, table_name, cursor.x - 1, 0) {
+                if common::is_cell(&db, &table_name, cursor.x - 1, 0) {
                     db.delete_column(
-                        table_name,
-                        &db.get_column_name_at(table_name, cursor.x - 1).unwrap(),
+                        &table_name,
+                        &db.get_column_name_at(&table_name, cursor.x - 1).unwrap(),
                     )
                     .unwrap();
                 }
@@ -147,10 +171,12 @@ fn main() {
             Command::YankCell => {
                 copy_buffer = if cursor.y == 0 {
                     Data::parse(&common::get_column_name_or_generic(
-                        cursor.x, &db, table_name,
+                        cursor.x,
+                        &db,
+                        &table_name,
                     ))
-                } else if common::is_cell(&db, table_name, cursor.x - 1, cursor.y - 1) {
-                    db.select_at(table_name, cursor.x - 1, cursor.y - 1)
+                } else if common::is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
+                    db.select_at(&table_name, cursor.x - 1, cursor.y - 1)
                         .unwrap()
                 } else {
                     Data::Empty
@@ -158,13 +184,16 @@ fn main() {
             }
             Command::PasteCell => {
                 if cursor.y > 0 {
-                    extend_table(&mut db, table_name, cursor.x, cursor.y).unwrap();
-                    db.set_at(table_name, cursor.y - 1, cursor.x - 1, copy_buffer.clone())
+                    extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
+                    db.set_at(&table_name, cursor.y - 1, cursor.x - 1, copy_buffer.clone())
                         .unwrap();
                 }
             }
         }
-        db.save().unwrap();
+        if let Err(e) = db.save() {
+            message = format!("{}", e);
+            mode = Mode::Error;
+        }
     }
 
     render::cleanup();
@@ -192,7 +221,7 @@ fn extend_table(
     Ok(())
 }
 
-fn enter_editor(
+fn editor_enter(
     db: &Db,
     table_name: &str,
     cursor: &cursor::Cursor,
@@ -225,10 +254,10 @@ fn enter_editor(
     }
 }
 
-fn exit_editor(
+fn editor_exit(
     db: &mut Db,
     table_name: &str,
-    mode: &mut mode::Mode,
+    mode: &mut Mode,
     cursor: &mut cursor::Cursor,
     editor: &mut editor::Editor,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -236,7 +265,7 @@ fn exit_editor(
     if cursor.y == 0 {
         // column name
         let old_column_name = common::get_column_name_or_generic(cursor.x, db, table_name);
-        let new_column_name = editor.line();
+        let new_column_name = editor.get_line();
         db.rename_column(table_name, &old_column_name, &new_column_name)
             .unwrap();
     } else {
@@ -248,6 +277,6 @@ fn exit_editor(
         )?;
     }
     editor.clear();
-    *mode = mode::Mode::Normal;
+    *mode = Mode::Normal;
     Ok(())
 }

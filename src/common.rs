@@ -4,7 +4,7 @@ pub(crate) fn is_cell(db: &Db, table_name: &str, x: usize, y: usize) -> bool {
     x < db.get_column_count(table_name).unwrap() && y < db.get_row_count(table_name).unwrap()
 }
 
-pub fn get_column_names_extended(db: &Db, table_name: &str, x: usize) -> Vec<String> {
+pub(crate) fn get_column_names_extended(db: &Db, table_name: &str, x: usize) -> Vec<String> {
     let mut names = db.get_column_names(table_name).unwrap();
     for idx in names.len()..=x {
         names.push(generate_column_name(db, table_name, idx + 1));

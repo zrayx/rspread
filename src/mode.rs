@@ -2,7 +2,9 @@
 pub enum Mode {
     Normal,
     Insert,
+    Command,
     Delete,
+    Error,
 }
 
 impl Mode {
@@ -20,6 +22,8 @@ impl std::fmt::Display for Mode {
                 Mode::Normal => "Normal".to_string(),
                 Mode::Insert => "Insert".to_string(),
                 Mode::Delete => "Delete".to_string(),
+                Mode::Command => "Command".to_string(),
+                Mode::Error => "Error".to_string(),
             }
         )
     }

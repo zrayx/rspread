@@ -25,6 +25,7 @@ pub fn input(
     command: &mut Command,
     mode: &mut Mode,
     editor: &mut Editor,
+    message: &mut String,
 ) {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
@@ -65,6 +66,8 @@ pub fn input(
                 Key::Char('d') => *mode = Mode::Delete,
                 Key::Char('C') => *command = Command::ChangeCell,
 
+                Key::Char(':') => *command = Command::CommandLineEnter,
+
                 Key::Ctrl('c') => *command = Command::YankCell,
                 Key::Ctrl('v') => *command = Command::PasteCell,
 
@@ -73,25 +76,41 @@ pub fn input(
                 // Key::Char(c) => println!("{}", c),
                 // Key::Alt(c) => println!("^{}", c),
                 _ => {
-                    panic!("Unknown key {:?}", c);
+                    *message = format!("Unknown key {:?}", c);
+                    *mode = Mode::Error;
                 }
             },
 
-            Mode::Insert => match c {
+            Mode::Insert | Mode::Command => match c {
                 Key::Esc | Key::Char('\t') | Key::Char('\n') => {
-                    *mode = Mode::Normal;
-                    if c == Key::Char('\t') {
-                        *command = Command::ExitEditorRight;
-                    } else if c == Key::Char('\n') {
-                        *command = Command::ExitEditorDown;
-                    } else {
-                        *command = Command::ExitEditor;
+                    match mode {
+                        Mode::Insert => {
+                            if c == Key::Char('\t') {
+                                *command = Command::EditorExitRight;
+                            } else if c == Key::Char('\n') {
+                                *command = Command::EditorExitDown;
+                            } else {
+                                *command = Command::EditorExit;
+                            }
+                        }
+                        Mode::Command => {
+                            *command = Command::CommandLineExit;
+                        }
+                        _ => {
+                            *message = format!("Mode {:?} should not appear here", mode);
+                            *mode = Mode::Error;
+                        }
                     }
+                    *mode = Mode::Normal;
                 }
-                Key::Left => editor.left(),
-                Key::Right => editor.right(),
+                Key::Ctrl('a') => editor.home(),
+                Key::Ctrl('e') => editor.end(),
+                Key::Ctrl('u') => editor.delete_left_all(),
+                Key::Ctrl('k') => editor.delete_right_all(),
+                Key::Left | Key::Ctrl('b') => editor.left(),
+                Key::Right | Key::Ctrl('f') => editor.right(),
                 Key::Char(c) => editor.add(c),
-                Key::Backspace => editor.backspace(),
+                Key::Backspace | Key::Ctrl('h') => editor.backspace(),
                 Key::Delete => editor.delete(),
                 _ => {}
             },
@@ -104,6 +123,8 @@ pub fn input(
                 }
                 *mode = Mode::Normal;
             }
+
+            Mode::Error => *mode = Mode::Normal,
         }
     }
 

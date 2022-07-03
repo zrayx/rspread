@@ -15,7 +15,14 @@ use crate::cursor::Cursor;
 use crate::editor::Editor;
 use crate::mode::Mode;
 
-pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &Editor) {
+pub fn render(
+    db: &Db,
+    table_name: &str,
+    cursor: &Cursor,
+    mode: &Mode,
+    editor: &Editor,
+    message: &str,
+) {
     let mut stdout = stdout().into_raw_mode().unwrap();
 
     let pad = |s: &str, width: usize| {
@@ -46,7 +53,7 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
         "{}{}{}{}{}",
         Fg(Black),
         Bg(Green),
-        Goto(1, terminal_height as u16),
+        Goto(1, terminal_height as u16 - 1),
         pad(&line, terminal_width - 1 - line.len()),
         Bg(Black),
     );
@@ -146,36 +153,42 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
 
     // render editor cell / cursor if outside existing cells
     if *mode == Mode::Insert
+        || *mode == Mode::Command
         || cursor.y > table_content.len()
         || (cursor.y > 0 && cursor.x > table_content[0].len())
     {
-        let (line, bg) = if *mode == Mode::Insert {
+        let (x_pos, y_pos, cursor_len, prefix) = if *mode == Mode::Command {
+            (1, terminal_height as u16, terminal_width, ":")
+        } else {
             (
-                pad(&editor.line, column_widths[cursor.x - 1]),
+                (column_pos[cursor.x - 1] + offset_left) as u16,
+                (offset_top + cursor.y + 1) as u16,
+                column_widths[cursor.x - 1],
+                "",
+            )
+        };
+
+        let (line, bg) = if *mode == Mode::Insert || *mode == Mode::Command {
+            (
+                format!("{}{}", prefix, pad(&editor.line, cursor_len - prefix.len())),
                 format!("{}", Bg(Yellow)),
             )
         } else {
-            (
-                pad("", column_widths[cursor.x - 1]),
-                format!("{}", Bg(White)),
-            )
+            (pad("", cursor_len), format!("{}", Bg(White)))
         };
 
         out += &bg;
         out += &format!(
             "{}{}{}{}{}",
             Fg(Black),
-            Goto(
-                (column_pos[cursor.x - 1] + offset_left) as u16,
-                (offset_top + cursor.y + 1) as u16
-            ),
+            Goto(x_pos, y_pos),
             line,
             Fg(Reset),
             Bg(Reset),
         );
 
         // render cursor of editor
-        if *mode == Mode::Insert {
+        if *mode == Mode::Insert || *mode == Mode::Command {
             let ch = if editor.cur_x >= editor.line.len() {
                 " ".to_string()
             } else {
@@ -185,15 +198,23 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
                 "{}{}{}{}{}{}",
                 Bg(Blue),
                 Fg(Black),
-                Goto(
-                    (column_pos[cursor.x - 1] + offset_left + editor.cur_x) as u16,
-                    (offset_top + cursor.y + 1) as u16
-                ),
+                Goto(x_pos + editor.cur_x as u16 + prefix.len() as u16, y_pos),
                 ch,
                 Bg(Reset),
                 Fg(Reset),
             );
         }
+    }
+    if *mode == Mode::Error {
+        out += &format!(
+            "{}{}{}{}{}{}",
+            Bg(Red),
+            Fg(Black),
+            Goto(1, terminal_height as u16),
+            pad(message, terminal_width),
+            Bg(Reset),
+            Fg(Reset),
+        );
     }
 
     // reset color and cursor position

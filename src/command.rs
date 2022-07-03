@@ -1,9 +1,13 @@
 pub enum Command {
     Quit,
     None,
-    ExitEditor,
-    ExitEditorRight,
-    ExitEditorDown,
+
+    EditorExit,
+    EditorExitRight,
+    EditorExitDown,
+
+    CommandLineEnter,
+    CommandLineExit,
 
     InsertStart,
     InsertEnd,
