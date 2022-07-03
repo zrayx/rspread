@@ -70,6 +70,29 @@ impl Editor {
         }
     }
 
+    pub fn delete_word(&mut self) {
+        while self.cur_x > 0
+            && self
+                .line
+                .chars()
+                .nth(self.cur_x - 1)
+                .unwrap()
+                .is_whitespace()
+        {
+            self.backspace();
+        }
+        while self.cur_x > 0
+            && !self
+                .line
+                .chars()
+                .nth(self.cur_x - 1)
+                .unwrap()
+                .is_whitespace()
+        {
+            self.backspace();
+        }
+    }
+
     pub fn get_line(&self) -> String {
         self.line.clone()
     }

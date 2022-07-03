@@ -6,11 +6,11 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 use crate::command::Command;
-use crate::cursor::Cursor;
 use crate::editor::Editor;
 use crate::mode::Mode;
+use crate::pos::Pos;
 
-fn move_cursor(cursor: &mut Cursor, dx: i16, dy: i16) {
+fn move_cursor(cursor: &mut Pos, dx: i16, dy: i16) {
     let new_x = cursor.x as i16 + dx;
     let new_y = cursor.y as i16 + dy;
     cursor.x = if new_x < 1 { 1 } else { new_x as usize };
@@ -21,7 +21,7 @@ fn move_cursor(cursor: &mut Cursor, dx: i16, dy: i16) {
 pub fn input(
     db: &rzdb::Db,
     table_name: &str,
-    cursor: &mut Cursor,
+    cursor: &mut Pos,
     command: &mut Command,
     mode: &mut Mode,
     editor: &mut Editor,
@@ -107,6 +107,7 @@ pub fn input(
                 Key::Ctrl('e') => editor.end(),
                 Key::Ctrl('u') => editor.delete_left_all(),
                 Key::Ctrl('k') => editor.delete_right_all(),
+                Key::Ctrl('w') => editor.delete_word(),
                 Key::Left | Key::Ctrl('b') => editor.left(),
                 Key::Right | Key::Ctrl('f') => editor.right(),
                 Key::Char(c) => editor.add(c),
@@ -124,7 +125,10 @@ pub fn input(
                 *mode = Mode::Normal;
             }
 
-            Mode::Error => *mode = Mode::Normal,
+            Mode::Error => {
+                *mode = Mode::Normal;
+                *message = "".to_string();
+            }
         }
     }
 

@@ -2,10 +2,10 @@ use rzdb::{time::Date, Data, Db};
 
 mod command;
 mod common;
-mod cursor;
 mod editor;
 mod input;
 mod mode;
+mod pos;
 mod render;
 
 use command::Command;
@@ -30,7 +30,7 @@ fn main() {
     // copy & paste
     let mut copy_buffer = Data::Empty;
     // process input
-    let mut cursor = cursor::Cursor::new(1, 1);
+    let mut cursor = pos::Pos::new(1, 1);
     let mut command = Command::new();
     let mut mode = Mode::new();
     let mut editor = editor::Editor::new();
@@ -90,7 +90,7 @@ fn main() {
                                 db.create_table(&table_name).unwrap();
                             }
                             editor.clear();
-                            cursor = cursor::Cursor::new(1, 1);
+                            cursor = pos::Pos::new(1, 1);
                         }
                     }
                 }
@@ -224,7 +224,7 @@ fn extend_table(
 fn editor_enter(
     db: &Db,
     table_name: &str,
-    cursor: &cursor::Cursor,
+    cursor: &pos::Pos,
     editor: &mut editor::Editor,
     cursor_x: i32,
 ) {
@@ -258,7 +258,7 @@ fn editor_exit(
     db: &mut Db,
     table_name: &str,
     mode: &mut Mode,
-    cursor: &mut cursor::Cursor,
+    cursor: &mut pos::Pos,
     editor: &mut editor::Editor,
 ) -> Result<(), Box<dyn std::error::Error>> {
     extend_table(db, table_name, cursor.x, cursor.y)?;

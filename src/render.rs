@@ -11,14 +11,14 @@ use termion::raw::RawTerminal;
 use rzdb::Db;
 
 use crate::common;
-use crate::cursor::Cursor;
 use crate::editor::Editor;
 use crate::mode::Mode;
+use crate::pos::Pos;
 
 pub fn render(
     db: &Db,
     table_name: &str,
-    cursor: &Cursor,
+    cursor: &Pos,
     mode: &Mode,
     editor: &Editor,
     message: &str,
@@ -33,14 +33,16 @@ pub fn render(
         s
     };
 
-    let offset_left = 6; // room for row id
-    let offset_top: usize = 0; // room for status line+column headers
+    let margin_left = 6; // room for row id
+    let margin_top: usize = 0; // nothing for now
+    let margin_bottom: usize = 2; // room for status line+command line
     let terminal_width = termion::terminal_size().unwrap().0 as usize;
     let terminal_height = termion::terminal_size().unwrap().1 as usize;
     let column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
     let table_content = db.select_from(table_name).unwrap();
 
     let mut out = String::new();
+    let mut offset = Pos::new(0, 0);
 
     out += &format!("{}{}", termion::cursor::Hide, termion::clear::All);
 
@@ -49,12 +51,13 @@ pub fn render(
         "Table: {}, Cur: ({},{}), {}",
         table_name, cursor.x, cursor.y, mode
     );
+    let line = line.chars().take(terminal_width).collect::<String>();
     out += &format!(
         "{}{}{}{}{}",
         Fg(Black),
         Bg(Green),
         Goto(1, terminal_height as u16 - 1),
-        pad(&line, terminal_width - 1 - line.len()),
+        pad(&line, terminal_width),
         Bg(Black),
     );
 
@@ -63,7 +66,6 @@ pub fn render(
     for column_name in &column_names_extended {
         column_widths.push(column_name.len());
     }
-
     for row in &table_content {
         for (idx, column) in row.iter().enumerate() {
             let len = column.to_string().len();
@@ -74,40 +76,54 @@ pub fn render(
     }
 
     // get the position of all columns
-    let mut column_pos = vec![];
+    // the length of the array is the number of columns + 1, as it includes the first not displayed position on the right
+    let mut column_pos = vec![0];
     let mut pos = 0;
     for column_width in column_widths.iter() {
-        column_pos.push(pos);
         pos += column_width + 1;
+        column_pos.push(pos);
+    }
+
+    // move cursor into view if it would be outside
+    loop {
+        let rightmost = margin_left + column_pos[cursor.x] - column_pos[offset.x] + 1;
+        if rightmost < terminal_width || offset.x == cursor.x - 1 {
+            break;
+        }
+        offset.x += 1;
+    }
+    if cursor.y > terminal_height - margin_top - margin_bottom - 2 {
+        offset.y = cursor.y - (terminal_height - margin_top - margin_bottom - 2);
     }
 
     // column headers
     let mut line = "Row# ".to_string();
     let num_columns = column_names_extended.len().max(cursor.x - 1);
-    for idx in 0..num_columns {
+    for idx in offset.x..num_columns {
         let column_name = &column_names_extended[idx];
         line += &pad(column_name, column_widths[idx] + 1);
     }
-    if line.len() > terminal_width {
-        line = line[..terminal_width].to_string();
+    if line.len() > terminal_width - margin_left {
+        line = line.chars().take(terminal_width).collect::<String>();
     } else {
         line += &" ".repeat(terminal_width - line.len());
     }
     out += &format!(
         "{}{}{}{}{}{}",
-        Goto(1, offset_top as u16),
+        Goto(1, margin_top as u16),
         Fg(Red),
         Bg(Reset),
         line,
         Fg(Reset),
         Bg(Reset),
     );
+    // render cursor in column header
     if cursor.y == 0 {
-        let x = column_pos[cursor.x - 1] + offset_left;
+        let x = column_pos[cursor.x - 1] + margin_left;
         let width = column_widths[cursor.x - 1];
         out += &format!(
             "{}{}{}{}{}{}",
-            Goto(x as u16, offset_top as u16 + 1),
+            Goto(x as u16, margin_top as u16 + 1),
             Fg(Black),
             Bg(Red),
             pad(&column_names_extended[cursor.x - 1], width),
@@ -118,33 +134,50 @@ pub fn render(
 
     // rows
     let num_rows = table_content.len().max(cursor.y).min(terminal_height);
-    for idx_y in 0..num_rows {
+    let last_row = num_rows.min(terminal_height - margin_top - margin_bottom - 1);
+    for idx_y in 0..last_row {
         // row id
         out += &format!(
             "{}{}{:4}{}",
             Fg(Red),
-            Goto(1, (offset_top + idx_y + 2) as u16),
-            idx_y + 1,
+            Goto(1, (margin_top + idx_y + 2) as u16),
+            idx_y + offset.y + 1,
             Fg(Reset)
         );
         // columns
-        if idx_y < table_content.len() {
-            let row = &table_content[idx_y];
-            for (idx_x, column) in row.iter().enumerate() {
+        if idx_y + offset.y < table_content.len() {
+            let row = &table_content[idx_y + offset.y];
+            for idx_x in offset.x..num_columns {
+                let data = if idx_x < row.len() {
+                    row[idx_x].to_string()
+                } else {
+                    "".to_string()
+                };
+
                 // render the cursor in inverse
-                if idx_x == cursor.x - 1 && idx_y + 1 == cursor.y {
+                if idx_x == cursor.x - 1 && idx_y + offset.y + 1 == cursor.y {
                     out += &format!("{}{}", Fg(Black), Bg(White));
                 }
-                let data = column.to_string();
+
+                // check if beyond right edge of window
+                if column_pos[idx_x] - column_pos[offset.x] + margin_left > terminal_width {
+                    break;
+                }
+
+                // don't display data if it is too long
+                let width_left =
+                    terminal_width + column_pos[offset.x] - column_pos[idx_x] + 1 - margin_left;
+                let data = data.chars().take(width_left).collect::<String>();
+
                 out += &format!(
                     "{}{}",
                     Goto(
-                        (column_pos[idx_x] + offset_left) as u16,
-                        (offset_top + idx_y + 2) as u16
+                        (column_pos[idx_x] - column_pos[offset.x] + margin_left) as u16,
+                        (margin_top + idx_y + 2) as u16
                     ),
                     pad(&data, column_widths[idx_x] + 1),
                 );
-                if idx_x == cursor.x - 1 && idx_y + 1 == cursor.y {
+                if idx_x == cursor.x - 1 && idx_y + offset.y + 1 == cursor.y {
                     out += &format!("{}{}", Fg(Reset), Bg(Reset));
                 }
             }
@@ -161,8 +194,8 @@ pub fn render(
             (1, terminal_height as u16, terminal_width, ":")
         } else {
             (
-                (column_pos[cursor.x - 1] + offset_left) as u16,
-                (offset_top + cursor.y + 1) as u16,
+                (column_pos[cursor.x - 1] + margin_left - column_pos[offset.x]) as u16,
+                (margin_top + cursor.y - offset.y + 1) as u16,
                 column_widths[cursor.x - 1],
                 "",
             )
@@ -205,11 +238,22 @@ pub fn render(
             );
         }
     }
+
     if *mode == Mode::Error {
         out += &format!(
             "{}{}{}{}{}{}",
             Bg(Red),
             Fg(Black),
+            Goto(1, terminal_height as u16),
+            pad(message, terminal_width),
+            Bg(Reset),
+            Fg(Reset),
+        );
+    } else {
+        out += &format!(
+            "{}{}{}{}{}{}",
+            Bg(Reset),
+            Fg(White),
             Goto(1, terminal_height as u16),
             pad(message, terminal_width),
             Bg(Reset),
