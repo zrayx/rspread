@@ -49,9 +49,9 @@ pub fn input(
                 Key::Char('\n') => move_cursor(cursor, 0, 1),
 
                 Key::Char('0') => cursor.x = 1,
-                Key::Char('$') => cursor.x = db.get_column_names(table_name).len(),
+                Key::Char('$') => cursor.x = db.get_column_names(table_name).unwrap().len(),
                 Key::Char('g') => cursor.y = 1,
-                Key::Char('G') => cursor.y = db.select_from(table_name).len(),
+                Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
 
                 Key::Char('.') => *command = Command::InsertToday,
                 Key::Char('I') => *command = Command::InsertColumn,

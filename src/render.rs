@@ -31,7 +31,7 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
     let terminal_width = termion::terminal_size().unwrap().0 as usize;
     let terminal_height = termion::terminal_size().unwrap().1 as usize;
     let column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
-    let table_content = db.select_from(table_name);
+    let table_content = db.select_from(table_name).unwrap();
 
     let mut out = String::new();
 
