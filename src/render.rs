@@ -10,6 +10,7 @@ use termion::raw::RawTerminal;
 
 use rzdb::Db;
 
+use crate::common;
 use crate::cursor::Cursor;
 use crate::editor::Editor;
 use crate::mode::Mode;
@@ -29,7 +30,7 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
     let offset_top: usize = 0; // room for status line+column headers
     let terminal_width = termion::terminal_size().unwrap().0 as usize;
     let terminal_height = termion::terminal_size().unwrap().1 as usize;
-    let mut column_names = db.get_column_names(table_name);
+    let column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
     let table_content = db.select_from(table_name);
 
     let mut out = String::new();
@@ -50,16 +51,9 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
         Bg(Black),
     );
 
-    // if the cursor is right of the right most column, append more columns (for display only)
-    let len = column_names.len();
-    for idx in len..(cursor.x) {
-        let new_column = format!("Column {}", idx + 1);
-        column_names.push(new_column);
-    }
-
     // get the max width of each column
     let mut column_widths: Vec<usize> = vec![];
-    for column_name in &column_names {
+    for column_name in &column_names_extended {
         column_widths.push(column_name.len());
     }
 
@@ -82,9 +76,9 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
 
     // column headers
     let mut line = "Row# ".to_string();
-    let num_columns = column_names.len().max(cursor.x - 1);
+    let num_columns = column_names_extended.len().max(cursor.x - 1);
     for idx in 0..num_columns {
-        let column_name = &column_names[idx];
+        let column_name = &column_names_extended[idx];
         line += &pad(column_name, column_widths[idx] + 1);
     }
     if line.len() > terminal_width {
@@ -101,6 +95,19 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
         Fg(Reset),
         Bg(Reset),
     );
+    if cursor.y == 0 {
+        let x = column_pos[cursor.x - 1] + offset_left;
+        let width = column_widths[cursor.x - 1];
+        out += &format!(
+            "{}{}{}{}{}{}",
+            Goto(x as u16, offset_top as u16 + 1),
+            Fg(Black),
+            Bg(Red),
+            pad(&column_names_extended[cursor.x - 1], width),
+            Fg(Reset),
+            Bg(Reset),
+        );
+    }
 
     // rows
     let num_rows = table_content.len().max(cursor.y).min(terminal_height);
@@ -118,7 +125,7 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
             let row = &table_content[idx_y];
             for (idx_x, column) in row.iter().enumerate() {
                 // render the cursor in inverse
-                if idx_x == cursor.x - 1 && idx_y == cursor.y - 1 {
+                if idx_x == cursor.x - 1 && idx_y + 1 == cursor.y {
                     out += &format!("{}{}", Fg(Black), Bg(White));
                 }
                 let data = column.to_string();
@@ -130,15 +137,17 @@ pub fn render(db: &Db, table_name: &str, cursor: &Cursor, mode: &Mode, editor: &
                     ),
                     pad(&data, column_widths[idx_x] + 1),
                 );
-                if idx_x == cursor.x - 1 && idx_y == cursor.y - 1 {
+                if idx_x == cursor.x - 1 && idx_y + 1 == cursor.y {
                     out += &format!("{}{}", Fg(Reset), Bg(Reset));
                 }
             }
         }
     }
 
-    // render cursor if outside existing cells
-    if *mode == Mode::Insert || cursor.y > table_content.len() || cursor.x > table_content[0].len()
+    // render editor cell / cursor if outside existing cells
+    if *mode == Mode::Insert
+        || cursor.y > table_content.len()
+        || (cursor.y > 0 && cursor.x > table_content[0].len())
     {
         let (line, bg) = if *mode == Mode::Insert {
             (

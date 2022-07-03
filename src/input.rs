@@ -14,7 +14,7 @@ fn move_cursor(cursor: &mut Cursor, dx: i16, dy: i16) {
     let new_x = cursor.x as i16 + dx;
     let new_y = cursor.y as i16 + dy;
     cursor.x = if new_x < 1 { 1 } else { new_x as usize };
-    cursor.y = if new_y < 1 { 1 } else { new_y as usize };
+    cursor.y = if new_y < 0 { 0 } else { new_y as usize };
 }
 
 #[allow(unused_variables)]
@@ -31,8 +31,9 @@ pub fn input(
     *command = Command::None;
     //let c = stdin.keys().next().unwrap();
     if let Some(c) = stdin.keys().next() {
+        let c = c.unwrap();
         match mode.clone() {
-            Mode::Normal => match c.unwrap() {
+            Mode::Normal => match c {
                 Key::Char('q') => *command = Command::Quit,
 
                 Key::Char('j') => move_cursor(cursor, 0, 1),
@@ -43,6 +44,10 @@ pub fn input(
                 Key::Right => move_cursor(cursor, 1, 0),
                 Key::Up => move_cursor(cursor, 0, -1),
                 Key::Down => move_cursor(cursor, 0, 1),
+                Key::Char('\t') => move_cursor(cursor, 1, 0),
+                Key::BackTab => move_cursor(cursor, -1, 0),
+                Key::Char('\n') => move_cursor(cursor, 0, 1),
+
                 Key::Char('0') => cursor.x = 1,
                 Key::Char('$') => cursor.x = db.get_column_names(table_name).len(),
                 Key::Char('g') => cursor.y = 1,
@@ -67,13 +72,21 @@ pub fn input(
                 // Key::Esc => println!("ESC"),
                 // Key::Char(c) => println!("{}", c),
                 // Key::Alt(c) => println!("^{}", c),
-                _ => {}
+                _ => {
+                    panic!("Unknown key {:?}", c);
+                }
             },
 
-            Mode::Insert => match c.unwrap() {
-                Key::Esc => {
-                    *command = Command::ExitEditor;
+            Mode::Insert => match c {
+                Key::Esc | Key::Char('\t') | Key::Char('\n') => {
                     *mode = Mode::Normal;
+                    if c == Key::Char('\t') {
+                        *command = Command::ExitEditorRight;
+                    } else if c == Key::Char('\n') {
+                        *command = Command::ExitEditorDown;
+                    } else {
+                        *command = Command::ExitEditor;
+                    }
                 }
                 Key::Left => editor.left(),
                 Key::Right => editor.right(),
@@ -84,7 +97,7 @@ pub fn input(
             },
 
             Mode::Delete => {
-                match c.unwrap() {
+                match c {
                     Key::Char('d') => *command = Command::DeleteLine,
                     Key::Char('c') => *command = Command::DeleteColumn,
                     _ => {}

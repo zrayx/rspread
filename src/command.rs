@@ -2,6 +2,8 @@ pub enum Command {
     Quit,
     None,
     ExitEditor,
+    ExitEditorRight,
+    ExitEditorDown,
 
     InsertStart,
     InsertEnd,
