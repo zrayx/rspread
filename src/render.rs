@@ -249,16 +249,6 @@ pub fn render(
             Bg(Reset),
             Fg(Reset),
         );
-    } else {
-        out += &format!(
-            "{}{}{}{}{}{}",
-            Bg(Reset),
-            Fg(White),
-            Goto(1, terminal_height as u16),
-            pad(message, terminal_width),
-            Bg(Reset),
-            Fg(Reset),
-        );
     }
 
     // reset color and cursor position

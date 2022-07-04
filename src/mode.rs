@@ -4,6 +4,7 @@ pub enum Mode {
     Insert,
     Command,
     Delete,
+    ListTables,
     Error,
 }
 
@@ -23,6 +24,7 @@ impl std::fmt::Display for Mode {
                 Mode::Insert => "Insert".to_string(),
                 Mode::Delete => "Delete".to_string(),
                 Mode::Command => "Command".to_string(),
+                Mode::ListTables => "List Tables".to_string(),
                 Mode::Error => "Error".to_string(),
             }
         )

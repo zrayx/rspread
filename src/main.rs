@@ -82,21 +82,52 @@ fn main() {
                 let line = editor.get_line();
                 let mut args = line.split_whitespace();
                 if let Some(command) = args.next() {
-                    if let Some(arg1) = args.next() {
-                        if command == "e" {
-                            // set table_name to new arg
-                            table_name = arg1.to_string();
-                            if !db.exists(&table_name) {
-                                db.create_table(&table_name).unwrap();
+                    match command {
+                        "e" => {
+                            if let Some(arg1) = args.next() {
+                                // set table_name to new arg
+                                table_name = arg1.to_string();
+                                if !db.exists(&table_name) {
+                                    db.create_table(&table_name).unwrap();
+                                }
+                                editor.clear();
+                                cursor = pos::Pos::new(1, 1);
                             }
-                            editor.clear();
-                            cursor = pos::Pos::new(1, 1);
+                        }
+                        "ls" => {
+                            cursor.y = 2;
+                            table_name = ".".to_string();
+                            db.create_or_replace_table(&table_name).unwrap();
+                            db.create_column(&table_name, "name").unwrap();
+                            let mut table_names = db.get_table_names();
+                            table_names.sort();
+                            for table in table_names {
+                                db.insert(&table_name, vec![&table]).unwrap();
+                            }
+                            mode = Mode::ListTables;
+                        }
+                        _ => {
+                            message = format!("Unknown command: {}", command);
+                            mode = Mode::Error;
                         }
                     }
                 }
-                mode = Mode::Normal;
+                if mode == Mode::Command {
+                    mode = Mode::Normal;
+                }
+                editor.clear();
             }
-
+            Command::ListTablesEnter => {
+                if cursor.y > 0 {
+                    if let Ok(selected_table_name) = db.select_at(&table_name, 0, cursor.y - 1) {
+                        if selected_table_name.to_string() != "." {
+                            table_name = selected_table_name.to_string();
+                            mode = Mode::Normal;
+                            cursor.y = 1;
+                        }
+                    }
+                }
+            }
             Command::InsertToday => {
                 if cursor.y > 0 {
                     if db.get_row_count(&table_name).unwrap() < cursor.y {

@@ -9,6 +9,8 @@ pub enum Command {
     CommandLineEnter,
     CommandLineExit,
 
+    ListTablesEnter,
+
     InsertStart,
     InsertEnd,
     ChangeCell,
