@@ -13,18 +13,45 @@ use input::input;
 use mode::Mode;
 
 fn main() {
-    let mut table_name = "todo".to_string();
-    let mut db = if let Ok(db) = Db::load("rspread", "./db") {
+    let args = std::env::args().collect::<Vec<_>>();
+    let (mut path, mut db_name, mut table_name) = match args.len() {
+        1 => (
+            "~/.local/rzdb".to_string(),
+            "rspread".to_string(),
+            "todo".to_string(),
+        ),
+        2 => {
+            let path = "~/.local/rzdb".to_string();
+            let db_name = "rspread".to_string();
+            let table_name = args[1].clone();
+            (path, db_name, table_name)
+        }
+        3 => {
+            let path = "~/.local/rzdb".to_string();
+            let db_name = args[1].clone();
+            let table_name = args[2].clone();
+            (path, db_name, table_name)
+        }
+        4 => {
+            let path = args[1].clone();
+            let db_name = args[2].clone();
+            let table_name = args[3].clone();
+            (path, db_name, table_name)
+        }
+        _ => {
+            println!("Usage: rzdb [db_path] [db_name] [table_name]");
+            std::process::exit(1);
+        }
+    };
+    let mut db = if let Ok(db) = Db::load(&db_name, &path) {
         db
     } else {
-        Db::create("rspread", "./db").unwrap()
+        Db::create(&db_name, &path).unwrap()
     };
     if !db.exists(&table_name) {
         db.create_table(&table_name).unwrap();
         db.create_column(&table_name, "date").unwrap();
         db.create_column(&table_name, "topic").unwrap();
-        db.insert(&table_name, vec!["2022.06.30", "navigate with cursor"])
-            .unwrap();
     };
 
     // copy & paste
@@ -37,6 +64,11 @@ fn main() {
     let mut message = String::new();
     loop {
         render::render(&db, &table_name, &cursor, &mode, &editor, &message);
+
+        if mode == Mode::Error {
+            mode = Mode::Normal;
+        }
+
         input(
             &db,
             &table_name,
@@ -46,6 +78,7 @@ fn main() {
             &mut editor,
             &mut message,
         );
+
         match command {
             Command::Quit => break,
             Command::None => {}
@@ -83,25 +116,55 @@ fn main() {
                 let mut args = line.split_whitespace();
                 if let Some(command) = args.next() {
                     match command {
-                        "e" => {
-                            if let Some(arg1) = args.next() {
-                                // set table_name to new arg
-                                let new_table_name = arg1.to_string();
-                                common::set_table(&new_table_name, &mut table_name, &mut cursor);
-                                if !db.exists(&table_name) {
-                                    db.create_table(&table_name).unwrap();
-                                }
-                                editor.clear();
-                                cursor = pos::Pos::new(1, 1);
-                            }
-                        }
+                        "e" => load_table(
+                            &mut args,
+                            &mut table_name,
+                            &mut cursor,
+                            &mut db,
+                            &mut editor,
+                        ),
                         "ls" => list_tables(&mut table_name, &mut cursor, &mut db, &mut mode),
                         "drop" => {
+                            drop_table(args, &mut db, &mut table_name, &mut cursor, &mut mode)
+                        }
+                        "cd" => {
                             if let Some(arg1) = args.next() {
-                                let name = arg1.to_string();
-                                db.drop_table(&name).unwrap();
+                                if let Some(arg2) = args.next() {
+                                    path = arg1.to_string();
+                                    db_name = arg2.to_string();
+                                } else {
+                                    db_name = arg1.to_string();
+                                }
+                                match Db::load(&db_name, &path) {
+                                    Ok(new_db) => {
+                                        db = new_db;
+                                    }
+                                    Err(e) => {
+                                        common::set_error_message(
+                                            &format!(
+                                                "Could not load database as {}/{}: {}",
+                                                path, db_name, e
+                                            ),
+                                            &mut message,
+                                            &mut mode,
+                                        );
+                                    }
+                                }
                                 list_tables(&mut table_name, &mut cursor, &mut db, &mut mode);
                             }
+                        }
+                        "pwd" => {
+                            println!("{}", path);
+                            let new_table_name = ".".to_string();
+                            common::set_table(&new_table_name, &mut table_name, &mut cursor);
+                            db.create_or_replace_table(&*table_name).unwrap();
+                            db.create_column(&*table_name, "name").unwrap();
+                            db.create_column(&*table_name, "value").unwrap();
+                            db.insert(&table_name, vec!["database path", &path])
+                                .unwrap();
+                            db.insert(&table_name, vec!["database name", &db_name])
+                                .unwrap();
+                            mode = Mode::ListReadOnly;
                         }
                         _ => {
                             common::set_error_message(
@@ -130,15 +193,12 @@ fn main() {
             }
             Command::InsertToday => {
                 if cursor.y > 0 {
-                    if db.get_row_count(&table_name).unwrap() < cursor.y {
-                        let column_count = db.get_column_count(&table_name).unwrap();
-                        db.insert(&table_name, vec![""; column_count]).unwrap();
-                    }
+                    extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
                     db.set_at(
                         &table_name,
                         cursor.y - 1,
                         cursor.x - 1,
-                        Data::parse(&Date::today().to_string()),
+                        Data::Date(Date::today()),
                     )
                     .unwrap();
                 }
@@ -221,12 +281,50 @@ fn main() {
                 }
             }
         }
+
         if let Err(e) = db.save() {
-            common::set_error_message(&format!("{}", e), &mut message, &mut mode);
+            common::set_error_message(
+                &format!("Error saving database at {}/{}: {}", path, db_name, e),
+                &mut message,
+                &mut mode,
+            );
         }
     }
 
     render::cleanup();
+}
+
+fn load_table(
+    args: &mut std::str::SplitWhitespace,
+    table_name: &mut String,
+    cursor: &mut pos::Pos,
+    db: &mut Db,
+    editor: &mut editor::Editor,
+) {
+    if let Some(arg1) = args.next() {
+        // set table_name to new arg
+        let new_table_name = arg1.to_string();
+        common::set_table(&new_table_name, table_name, cursor);
+        if !db.exists(&*table_name) {
+            db.create_table(&*table_name).unwrap();
+        }
+        editor.clear();
+        *cursor = pos::Pos::new(1, 1);
+    }
+}
+
+fn drop_table(
+    mut args: std::str::SplitWhitespace,
+    db: &mut Db,
+    table_name: &mut String,
+    cursor: &mut pos::Pos,
+    mode: &mut Mode,
+) {
+    if let Some(arg1) = args.next() {
+        let name = arg1.to_string();
+        db.drop_table(&name).unwrap();
+        list_tables(table_name, cursor, db, mode);
+    }
 }
 
 fn list_tables(table_name: &mut String, cursor: &mut pos::Pos, db: &mut Db, mode: &mut Mode) {

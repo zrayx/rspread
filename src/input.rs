@@ -126,12 +126,13 @@ pub fn input(
                 *mode = Mode::Normal;
             }
 
-            Mode::ListTables => match c {
+            Mode::ListReadOnly | Mode::ListTables => match c {
                 Key::Char('j') => move_cursor(cursor, 0, 1),
                 Key::Char('k') => move_cursor(cursor, 0, -1),
                 Key::Up => move_cursor(cursor, 0, -1),
                 Key::Down => move_cursor(cursor, 0, 1),
                 Key::Char('\n') => *command = Command::ListTablesEnter,
+                Key::Char(':') => *command = Command::CommandLineEnter,
                 _ => {}
             },
 
