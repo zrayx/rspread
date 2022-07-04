@@ -1,3 +1,5 @@
+use crate::mode::Mode;
+use crate::pos::Pos;
 use rzdb::Db;
 
 pub(crate) fn is_cell(db: &Db, table_name: &str, x: usize, y: usize) -> bool {
@@ -30,4 +32,14 @@ pub(crate) fn generate_column_name(db: &Db, table_name: &str, x: usize) -> Strin
         }
         x += 1;
     }
+}
+
+pub(crate) fn set_error_message(new_message: &str, message: &mut String, mode: &mut Mode) {
+    *message = new_message.to_string();
+    *mode = Mode::Error;
+}
+
+pub(crate) fn set_table(new_table_name: &str, table_name: &mut String, cursor: &mut Pos) {
+    *table_name = new_table_name.to_string();
+    *cursor = Pos::new(1, 1);
 }

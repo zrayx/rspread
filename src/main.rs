@@ -86,7 +86,8 @@ fn main() {
                         "e" => {
                             if let Some(arg1) = args.next() {
                                 // set table_name to new arg
-                                table_name = arg1.to_string();
+                                let new_table_name = arg1.to_string();
+                                common::set_table(&new_table_name, &mut table_name, &mut cursor);
                                 if !db.exists(&table_name) {
                                     db.create_table(&table_name).unwrap();
                                 }
@@ -94,21 +95,20 @@ fn main() {
                                 cursor = pos::Pos::new(1, 1);
                             }
                         }
-                        "ls" => {
-                            cursor.y = 2;
-                            table_name = ".".to_string();
-                            db.create_or_replace_table(&table_name).unwrap();
-                            db.create_column(&table_name, "name").unwrap();
-                            let mut table_names = db.get_table_names();
-                            table_names.sort();
-                            for table in table_names {
-                                db.insert(&table_name, vec![&table]).unwrap();
+                        "ls" => list_tables(&mut table_name, &mut cursor, &mut db, &mut mode),
+                        "drop" => {
+                            if let Some(arg1) = args.next() {
+                                let name = arg1.to_string();
+                                db.drop_table(&name).unwrap();
+                                list_tables(&mut table_name, &mut cursor, &mut db, &mut mode);
                             }
-                            mode = Mode::ListTables;
                         }
                         _ => {
-                            message = format!("Unknown command: {}", command);
-                            mode = Mode::Error;
+                            common::set_error_message(
+                                &format!("Unknown command: {}", command),
+                                &mut message,
+                                &mut mode,
+                            );
                         }
                     }
                 }
@@ -120,10 +120,10 @@ fn main() {
             Command::ListTablesEnter => {
                 if cursor.y > 0 {
                     if let Ok(selected_table_name) = db.select_at(&table_name, 0, cursor.y - 1) {
-                        if selected_table_name.to_string() != "." {
-                            table_name = selected_table_name.to_string();
+                        let new_table_name = selected_table_name.to_string();
+                        if new_table_name != "." {
+                            common::set_table(&new_table_name, &mut table_name, &mut cursor);
                             mode = Mode::Normal;
-                            cursor.y = 1;
                         }
                     }
                 }
@@ -222,12 +222,26 @@ fn main() {
             }
         }
         if let Err(e) = db.save() {
-            message = format!("{}", e);
-            mode = Mode::Error;
+            common::set_error_message(&format!("{}", e), &mut message, &mut mode);
         }
     }
 
     render::cleanup();
+}
+
+fn list_tables(table_name: &mut String, cursor: &mut pos::Pos, db: &mut Db, mode: &mut Mode) {
+    let new_table_name = ".".to_string();
+    common::set_table(&new_table_name, table_name, cursor);
+    db.create_or_replace_table(&*table_name).unwrap();
+    db.create_column(&*table_name, "name").unwrap();
+    let mut table_names = db.get_table_names();
+    table_names.sort();
+    for table in table_names {
+        if &table != "." {
+            db.insert(&*table_name, vec![&table]).unwrap();
+        }
+    }
+    *mode = Mode::ListTables;
 }
 
 fn extend_table(

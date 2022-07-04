@@ -6,6 +6,7 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 use crate::command::Command;
+use crate::common;
 use crate::editor::Editor;
 use crate::mode::Mode;
 use crate::pos::Pos;
@@ -75,10 +76,7 @@ pub fn input(
                 // Key::Esc => println!("ESC"),
                 // Key::Char(c) => println!("{}", c),
                 // Key::Alt(c) => println!("^{}", c),
-                _ => {
-                    *message = format!("Unknown key {:?}", c);
-                    *mode = Mode::Error;
-                }
+                _ => common::set_error_message(&format!("Unknown key {:?}", c), message, mode),
             },
 
             Mode::Insert | Mode::Command => match c {
@@ -96,12 +94,15 @@ pub fn input(
                         Mode::Command => {
                             *command = Command::CommandLineExit;
                         }
-                        _ => {
-                            *message = format!("Mode {:?} should not appear here", mode);
-                            *mode = Mode::Error;
-                        }
+                        _ => common::set_error_message(
+                            &format!("Mode {:?} should not appear here", mode),
+                            message,
+                            mode,
+                        ),
                     }
-                    *mode = Mode::Normal;
+                    if *mode != Mode::Error {
+                        *mode = Mode::Normal;
+                    }
                 }
                 Key::Ctrl('a') => editor.home(),
                 Key::Ctrl('e') => editor.end(),
