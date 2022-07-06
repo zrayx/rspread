@@ -96,32 +96,30 @@ fn main() {
                 mode = Mode::Insert;
                 editor.insert_at("", 0);
             }
-            Command::EditorExit => {
+            Command::EditorExit
+            | Command::EditorExitUp
+            | Command::EditorExitDown
+            | Command::EditorExitLeft
+            | Command::EditorExitRight => {
                 mode = Mode::Normal;
                 if let Err(e) =
                     editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
                 {
                     set_error_message(&e.to_string(), &mut message, &mut mode);
                 }
-            }
-            Command::EditorExitRight => {
-                mode = Mode::Normal;
-                if let Err(e) =
-                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
-                {
-                    set_error_message(&e.to_string(), &mut message, &mut mode);
+                if command != Command::EditorExit {
+                    if command == Command::EditorExitLeft && cursor.x > 1 {
+                        cursor.x -= 1;
+                    } else if command == Command::EditorExitRight {
+                        cursor.x += 1;
+                    } else if command == Command::EditorExitUp && cursor.y > 0 {
+                        cursor.y -= 1;
+                    } else if command == Command::EditorExitDown {
+                        cursor.y += 1;
+                    }
+                    mode = Mode::Insert;
+                    editor_enter(&db, &table_name, &cursor, &mut editor, -1);
                 }
-                cursor.x += 1;
-                mode = Mode::Insert;
-            }
-            Command::EditorExitDown => {
-                if let Err(e) =
-                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
-                {
-                    set_error_message(&e.to_string(), &mut message, &mut mode);
-                }
-                cursor.y += 1;
-                mode = Mode::Insert;
             }
             Command::CommandLineEnter => {
                 mode = Mode::Command;
@@ -262,6 +260,9 @@ fn main() {
             Command::DeleteLine => {
                 if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
                     db.delete_row_at(&table_name, cursor.y - 1).unwrap();
+                }
+                if cursor.y > 1 && cursor.y > db.get_row_count(&table_name).unwrap() {
+                    cursor.y -= 1;
                 }
             }
             Command::DeleteColumn => {

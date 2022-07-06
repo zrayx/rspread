@@ -86,8 +86,8 @@ pub fn render(
 
     // move cursor into view if it would be outside
     loop {
-        let rightmost = margin_left + column_pos[cursor.x] - column_pos[offset.x] + 1;
-        if rightmost < terminal_width || offset.x == cursor.x - 1 {
+        let rightmost = margin_left + column_pos[cursor.x] - column_pos[offset.x];
+        if rightmost <= terminal_width || offset.x == cursor.x - 1 {
             break;
         }
         offset.x += 1;
@@ -119,7 +119,7 @@ pub fn render(
     );
     // render cursor in column header
     if cursor.y == 0 {
-        let x = column_pos[cursor.x - 1] + margin_left;
+        let x = column_pos[cursor.x - 1] - column_pos[offset.x] + margin_left;
         let width = column_widths[cursor.x - 1];
         out += &format!(
             "{}{}{}{}{}{}",

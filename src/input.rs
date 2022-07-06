@@ -80,19 +80,28 @@ pub fn input(
             },
 
             Mode::Insert | Mode::Command => match c {
-                Key::Esc | Key::Char('\t') | Key::Char('\n') => {
+                Key::Esc
+                | Key::Char('\t')
+                | Key::Char('\n')
+                | Key::BackTab
+                | Key::Up
+                | Key::Down => {
                     match mode {
                         Mode::Insert => {
-                            if c == Key::Char('\t') {
-                                *command = Command::EditorExitRight;
-                            } else if c == Key::Char('\n') {
-                                *command = Command::EditorExitDown;
-                            } else {
-                                *command = Command::EditorExit;
-                            }
+                            *command = match c {
+                                Key::Char('\t') => Command::EditorExitRight,
+                                Key::BackTab => Command::EditorExitLeft,
+                                Key::Up => Command::EditorExitUp,
+                                Key::Down | Key::Char('\n') => Command::EditorExitDown,
+                                _ => Command::None,
+                            };
                         }
                         Mode::Command => {
-                            *command = Command::CommandLineExit;
+                            *command = if c == Key::Char('\n') {
+                                Command::CommandLineExit
+                            } else {
+                                Command::None
+                            };
                         }
                         _ => common::set_error_message(
                             &format!("Mode {:?} should not appear here", mode),

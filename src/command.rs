@@ -1,9 +1,12 @@
+#[derive(Clone, PartialEq)]
 pub enum Command {
     Quit,
     None,
 
     EditorExit,
+    EditorExitLeft,
     EditorExitRight,
+    EditorExitUp,
     EditorExitDown,
 
     CommandLineEnter,
