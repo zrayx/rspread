@@ -1,3 +1,4 @@
+use common::*;
 use rzdb::{time::Date, Data, Db};
 
 mod command;
@@ -96,17 +97,30 @@ fn main() {
             }
             Command::EditorExit => {
                 mode = Mode::Normal;
-                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+                if let Err(e) =
+                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
+                {
+                    set_error_message(&e.to_string(), &mut message, &mut mode);
+                }
             }
             Command::EditorExitRight => {
                 mode = Mode::Normal;
-                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+                if let Err(e) =
+                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
+                {
+                    set_error_message(&e.to_string(), &mut message, &mut mode);
+                }
                 cursor.x += 1;
+                mode = Mode::Insert;
             }
             Command::EditorExitDown => {
-                mode = Mode::Normal;
-                editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor).unwrap();
+                if let Err(e) =
+                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
+                {
+                    set_error_message(&e.to_string(), &mut message, &mut mode);
+                }
                 cursor.y += 1;
+                mode = Mode::Insert;
             }
             Command::CommandLineEnter => {
                 mode = Mode::Command;
@@ -140,7 +154,7 @@ fn main() {
                                         db = new_db;
                                     }
                                     Err(e) => {
-                                        common::set_error_message(
+                                        set_error_message(
                                             &format!(
                                                 "Could not load database as {}/{}: {}",
                                                 path, db_name, e
@@ -156,7 +170,7 @@ fn main() {
                         "pwd" => {
                             println!("{}", path);
                             let new_table_name = ".".to_string();
-                            common::set_table(&new_table_name, &mut table_name, &mut cursor);
+                            set_table(&new_table_name, &mut table_name, &mut cursor);
                             db.create_or_replace_table(&*table_name).unwrap();
                             db.create_column(&*table_name, "name").unwrap();
                             db.create_column(&*table_name, "value").unwrap();
@@ -167,7 +181,7 @@ fn main() {
                             mode = Mode::ListReadOnly;
                         }
                         _ => {
-                            common::set_error_message(
+                            set_error_message(
                                 &format!("Unknown command: {}", command),
                                 &mut message,
                                 &mut mode,
@@ -185,7 +199,7 @@ fn main() {
                     if let Ok(selected_table_name) = db.select_at(&table_name, 0, cursor.y - 1) {
                         let new_table_name = selected_table_name.to_string();
                         if new_table_name != "." {
-                            common::set_table(&new_table_name, &mut table_name, &mut cursor);
+                            set_table(&new_table_name, &mut table_name, &mut cursor);
                             mode = Mode::Normal;
                         }
                     }
@@ -208,50 +222,49 @@ fn main() {
                 while column_count < cursor.x {
                     db.create_column(
                         &table_name,
-                        &common::generate_column_name(&db, &table_name, column_count),
+                        &generate_column_name(&db, &table_name, column_count),
                     )
                     .unwrap();
                     column_count += 1;
                 }
                 db.insert_column_at(
                     &table_name,
-                    &common::generate_column_name(&db, &table_name, cursor.x),
+                    &generate_column_name(&db, &table_name, cursor.x),
                     cursor.x - 1,
                 )
                 .unwrap();
             }
             Command::InsertRowAbove => {
-                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y - 1) {
+                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
                     db.insert_row_at(&table_name, cursor.y - 1).unwrap();
                 }
             }
             Command::InsertRowBelow => {
-                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y) {
+                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y) {
                     db.insert_row_at(&table_name, cursor.y).unwrap();
                 }
                 cursor.y += 1;
             }
             Command::DeleteCell => {
                 if cursor.y > 0 {
-                    if common::is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
+                    if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
                         db.set_at(&table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
                             .unwrap();
                     }
                 } else {
                     let old_column_name = db.get_column_name_at(&table_name, cursor.x - 1).unwrap();
-                    let generic_column_name =
-                        common::generate_column_name(&db, &table_name, cursor.x - 1);
+                    let generic_column_name = generate_column_name(&db, &table_name, cursor.x - 1);
                     db.rename_column(&table_name, &old_column_name, &generic_column_name)
                         .unwrap();
                 }
             }
             Command::DeleteLine => {
-                if cursor.y > 0 && common::is_cell(&db, &table_name, 0, cursor.y - 1) {
+                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
                     db.delete_row_at(&table_name, cursor.y - 1).unwrap();
                 }
             }
             Command::DeleteColumn => {
-                if common::is_cell(&db, &table_name, cursor.x - 1, 0) {
+                if is_cell(&db, &table_name, cursor.x - 1, 0) {
                     db.delete_column(
                         &table_name,
                         &db.get_column_name_at(&table_name, cursor.x - 1).unwrap(),
@@ -261,12 +274,8 @@ fn main() {
             }
             Command::YankCell => {
                 copy_buffer = if cursor.y == 0 {
-                    Data::parse(&common::get_column_name_or_generic(
-                        cursor.x,
-                        &db,
-                        &table_name,
-                    ))
-                } else if common::is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
+                    Data::parse(&get_column_name_or_generic(cursor.x, &db, &table_name))
+                } else if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
                     db.select_at(&table_name, cursor.x - 1, cursor.y - 1)
                         .unwrap()
                 } else {
@@ -283,7 +292,7 @@ fn main() {
         }
 
         if let Err(e) = db.save() {
-            common::set_error_message(
+            set_error_message(
                 &format!("Error saving database at {}/{}: {}", path, db_name, e),
                 &mut message,
                 &mut mode,
@@ -304,7 +313,7 @@ fn load_table(
     if let Some(arg1) = args.next() {
         // set table_name to new arg
         let new_table_name = arg1.to_string();
-        common::set_table(&new_table_name, table_name, cursor);
+        set_table(&new_table_name, table_name, cursor);
         if !db.exists(&*table_name) {
             db.create_table(&*table_name).unwrap();
         }
@@ -329,7 +338,7 @@ fn drop_table(
 
 fn list_tables(table_name: &mut String, cursor: &mut pos::Pos, db: &mut Db, mode: &mut Mode) {
     let new_table_name = ".".to_string();
-    common::set_table(&new_table_name, table_name, cursor);
+    set_table(&new_table_name, table_name, cursor);
     db.create_or_replace_table(&*table_name).unwrap();
     db.create_column(&*table_name, "name").unwrap();
     let mut table_names = db.get_table_names();
@@ -351,11 +360,8 @@ fn extend_table(
     let old_row_count = db.get_row_count(table_name).unwrap();
     let old_column_count = db.get_column_count(table_name).unwrap();
     for idx in old_column_count..new_column_count {
-        db.create_column(
-            table_name,
-            &common::generate_column_name(db, table_name, idx + 1),
-        )
-        .unwrap();
+        db.create_column(table_name, &generate_column_name(db, table_name, idx + 1))
+            .unwrap();
     }
     for _ in old_row_count..new_row_count {
         let column_count = new_column_count.max(old_column_count);
@@ -374,11 +380,11 @@ fn editor_enter(
     let column_count = db.get_column_count(table_name).unwrap();
     let old_text = if cursor.y == 0 {
         if cursor.x > column_count {
-            common::generate_column_name(db, table_name, cursor.x)
+            generate_column_name(db, table_name, cursor.x)
         } else {
             db.get_column_name_at(table_name, cursor.x - 1).unwrap()
         }
-    } else if common::is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
+    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
         db.select_at(table_name, cursor.x - 1, cursor.y - 1)
             .unwrap()
             .to_string()
@@ -407,10 +413,9 @@ fn editor_exit(
     extend_table(db, table_name, cursor.x, cursor.y)?;
     if cursor.y == 0 {
         // column name
-        let old_column_name = common::get_column_name_or_generic(cursor.x, db, table_name);
+        let old_column_name = get_column_name_or_generic(cursor.x, db, table_name);
         let new_column_name = editor.get_line();
-        db.rename_column(table_name, &old_column_name, &new_column_name)
-            .unwrap();
+        db.rename_column(table_name, &old_column_name, &new_column_name)?;
     } else {
         db.set_at(
             table_name,
