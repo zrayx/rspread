@@ -89,6 +89,7 @@ pub fn input(
                     match mode {
                         Mode::Insert => {
                             *command = match c {
+                                Key::Esc => Command::EditorExit,
                                 Key::Char('\t') => Command::EditorExitRight,
                                 Key::BackTab => Command::EditorExitLeft,
                                 Key::Up => Command::EditorExitUp,

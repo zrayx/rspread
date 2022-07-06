@@ -42,6 +42,8 @@ fn main() {
         }
         _ => {
             println!("Usage: rzdb [db_path] [db_name] [table_name]");
+            println!("Or   : rzdb [db_name] [table_name]");
+            println!("Or   : rzdb [table_name]");
             std::process::exit(1);
         }
     };
@@ -57,7 +59,7 @@ fn main() {
     };
 
     // copy & paste
-    let mut copy_buffer = Data::Empty;
+    let clipboard_table_name = "clipboard";
     // process input
     let mut cursor = pos::Pos::new(1, 1);
     let mut command = Command::new();
@@ -275,20 +277,39 @@ fn main() {
                 }
             }
             Command::YankCell => {
-                copy_buffer = if cursor.y == 0 {
-                    Data::parse(&get_column_name_or_generic(cursor.x, &db, &table_name))
-                } else if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
-                    db.select_at(&table_name, cursor.x - 1, cursor.y - 1)
-                        .unwrap()
+                let column_name = get_column_name_or_generic(cursor.x, &db, &table_name);
+                if cursor.y == 0 {
+                    db.create_or_replace_table(clipboard_table_name).unwrap();
+                    db.create_column(clipboard_table_name, &column_name)
+                        .unwrap();
+                    db.insert(clipboard_table_name, vec![&column_name]).unwrap();
                 } else {
-                    Data::Empty
-                };
+                    let (start, end) = if cursor.y == 0 {
+                        (0, 0)
+                    } else {
+                        (cursor.y - 1, cursor.y)
+                    };
+                    db.select_into(
+                        clipboard_table_name,
+                        &table_name,
+                        &[&column_name],
+                        start,
+                        end,
+                    )
+                    .unwrap();
+                }
             }
             Command::PasteCell => {
-                if cursor.y > 0 {
-                    extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
-                    db.set_at(&table_name, cursor.y - 1, cursor.x - 1, copy_buffer.clone())
-                        .unwrap();
+                if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
+                    if cursor.y > 0 {
+                        extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
+                        db.set_at(&table_name, cursor.y - 1, cursor.x - 1, cell_data)
+                            .unwrap();
+                    } else {
+                        let new_name = cell_data.to_string();
+                        let old_name = db.get_column_name_at(&table_name, cursor.x - 1).unwrap();
+                        db.rename_column(&table_name, &old_name, &new_name).unwrap();
+                    }
                 }
             }
         }
