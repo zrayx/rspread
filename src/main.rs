@@ -1,5 +1,6 @@
-use common::*;
 use rzdb::{time::Date, Data, Db};
+
+use common::*;
 
 mod command;
 mod common;
@@ -85,7 +86,7 @@ fn main() {
             Command::None => {}
             Command::InsertStart => {
                 mode = Mode::Insert;
-                editor_enter(&db, &table_name, &cursor, &mut editor, 0);
+                common::editor_enter(&db, &table_name, &cursor, &mut editor, 0);
             }
             Command::InsertEnd => {
                 mode = Mode::Insert;
@@ -301,130 +302,4 @@ fn main() {
     }
 
     render::cleanup();
-}
-
-fn load_table(
-    args: &mut std::str::SplitWhitespace,
-    table_name: &mut String,
-    cursor: &mut pos::Pos,
-    db: &mut Db,
-    editor: &mut editor::Editor,
-) {
-    if let Some(arg1) = args.next() {
-        // set table_name to new arg
-        let new_table_name = arg1.to_string();
-        set_table(&new_table_name, table_name, cursor);
-        if !db.exists(&*table_name) {
-            db.create_table(&*table_name).unwrap();
-        }
-        editor.clear();
-        *cursor = pos::Pos::new(1, 1);
-    }
-}
-
-fn drop_table(
-    mut args: std::str::SplitWhitespace,
-    db: &mut Db,
-    table_name: &mut String,
-    cursor: &mut pos::Pos,
-    mode: &mut Mode,
-) {
-    if let Some(arg1) = args.next() {
-        let name = arg1.to_string();
-        db.drop_table(&name).unwrap();
-        list_tables(table_name, cursor, db, mode);
-    }
-}
-
-fn list_tables(table_name: &mut String, cursor: &mut pos::Pos, db: &mut Db, mode: &mut Mode) {
-    let new_table_name = ".".to_string();
-    set_table(&new_table_name, table_name, cursor);
-    db.create_or_replace_table(&*table_name).unwrap();
-    db.create_column(&*table_name, "name").unwrap();
-    let mut table_names = db.get_table_names();
-    table_names.sort();
-    for table in table_names {
-        if &table != "." {
-            db.insert(&*table_name, vec![&table]).unwrap();
-        }
-    }
-    *mode = Mode::ListTables;
-}
-
-fn extend_table(
-    db: &mut Db,
-    table_name: &str,
-    new_column_count: usize,
-    new_row_count: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let old_row_count = db.get_row_count(table_name).unwrap();
-    let old_column_count = db.get_column_count(table_name).unwrap();
-    for idx in old_column_count..new_column_count {
-        db.create_column(table_name, &generate_column_name(db, table_name, idx + 1))
-            .unwrap();
-    }
-    for _ in old_row_count..new_row_count {
-        let column_count = new_column_count.max(old_column_count);
-        db.insert(table_name, vec![""; column_count]).unwrap();
-    }
-    Ok(())
-}
-
-fn editor_enter(
-    db: &Db,
-    table_name: &str,
-    cursor: &pos::Pos,
-    editor: &mut editor::Editor,
-    cursor_x: i32,
-) {
-    let column_count = db.get_column_count(table_name).unwrap();
-    let old_text = if cursor.y == 0 {
-        if cursor.x > column_count {
-            generate_column_name(db, table_name, cursor.x)
-        } else {
-            db.get_column_name_at(table_name, cursor.x - 1).unwrap()
-        }
-    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
-        db.select_at(table_name, cursor.x - 1, cursor.y - 1)
-            .unwrap()
-            .to_string()
-    } else {
-        "".to_string()
-    };
-    if cursor_x < 0 {
-        let len = old_text.len() as i32;
-        if len - cursor_x >= 0 {
-            editor.insert_at(&old_text, (len - cursor_x + 1) as usize);
-        } else {
-            editor.insert_at(&old_text, 0);
-        }
-    } else {
-        editor.insert_at(&old_text, cursor_x as usize);
-    }
-}
-
-fn editor_exit(
-    db: &mut Db,
-    table_name: &str,
-    mode: &mut Mode,
-    cursor: &mut pos::Pos,
-    editor: &mut editor::Editor,
-) -> Result<(), Box<dyn std::error::Error>> {
-    extend_table(db, table_name, cursor.x, cursor.y)?;
-    if cursor.y == 0 {
-        // column name
-        let old_column_name = get_column_name_or_generic(cursor.x, db, table_name);
-        let new_column_name = editor.get_line();
-        db.rename_column(table_name, &old_column_name, &new_column_name)?;
-    } else {
-        db.set_at(
-            table_name,
-            cursor.y - 1,
-            cursor.x - 1,
-            Data::parse(&editor.line),
-        )?;
-    }
-    editor.clear();
-    *mode = Mode::Normal;
-    Ok(())
 }
