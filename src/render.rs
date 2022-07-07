@@ -149,7 +149,7 @@ pub fn render(
             let row = &table_content[idx_y + offset.y];
             for idx_x in offset.x..num_columns {
                 let data = if idx_x < row.len() {
-                    row[idx_x].to_string()
+                    row.select_at(idx_x).unwrap().to_string()
                 } else {
                     "".to_string()
                 };

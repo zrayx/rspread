@@ -220,8 +220,9 @@ pub(crate) fn paste(
 ) {
     let paste_column_header = start_y == 0 && end_y == 1;
     let paste_overwrite_cells = start_x != 0 && start_y != 0;
-    let paste_rows = start_y == 0 && end_y != 1;
-    let paste_columns = start_x == 0;
+    let paste_rows = start_x == 0;
+    let paste_columns = start_y == 0 && end_y != 1;
+    // TODO: paste all data, not only one cell
     if paste_column_header || paste_overwrite_cells {
         if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
             if paste_overwrite_cells {
@@ -233,6 +234,21 @@ pub(crate) fn paste(
                 let old_name = db.get_column_name_at(table_name, start_x - 1).unwrap();
                 db.rename_column(table_name, &old_name, &new_name).unwrap();
             }
+        }
+    } else {
+        let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
+        let clipboard_row_count = db.get_row_count(clipboard_table_name).unwrap();
+        let table_column_count = db.get_column_count(table_name).unwrap();
+        let table_row_count = db.get_row_count(table_name).unwrap();
+        if paste_rows {
+            extend_table(db, table_name, table_column_count, 0).unwrap();
+            db.insert_into_at(clipboard_table_name, table_name, start_y - 1)
+                .unwrap();
+        } else if paste_columns {
+            // TODO
+            let _y = "";
+        } else {
+            unreachable!("unreachable() reached in paste()");
         }
     }
 }

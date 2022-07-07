@@ -47,6 +47,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    // TODO: check if database exists; if it exists, return error on failure to load
     let mut db = if let Ok(db) = Db::load(&db_name, &path) {
         db
     } else {
@@ -206,7 +207,7 @@ fn main() {
                     }
                 }
             }
-            Command::InsertToday => {
+            Command::PasteToday => {
                 if cursor.y > 0 {
                     extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
                     db.set_at(
@@ -218,7 +219,7 @@ fn main() {
                     .unwrap();
                 }
             }
-            Command::InsertColumn => {
+            Command::InsertEmptyColumn => {
                 let mut column_count = db.get_column_count(&table_name).unwrap();
                 while column_count < cursor.x {
                     db.create_column(
@@ -235,14 +236,14 @@ fn main() {
                 )
                 .unwrap();
             }
-            Command::InsertRowAbove => {
+            Command::InsertEmptyRowAbove => {
                 if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
-                    db.insert_row_at(&table_name, cursor.y - 1).unwrap();
+                    db.insert_empty_row_at(&table_name, cursor.y - 1).unwrap();
                 }
             }
-            Command::InsertRowBelow => {
+            Command::InsertEmptyRowBelow => {
                 if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y) {
-                    db.insert_row_at(&table_name, cursor.y).unwrap();
+                    db.insert_empty_row_at(&table_name, cursor.y).unwrap();
                 }
                 cursor.y += 1;
             }
@@ -307,7 +308,7 @@ fn main() {
                 let (start_x, end_x, start_y, end_y) = match command {
                     Command::PasteCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
                     Command::PasteRow => (
-                        1,
+                        0,
                         db.get_column_count(&table_name).unwrap() + 1,
                         cursor.y,
                         cursor.y + 1,
@@ -315,7 +316,7 @@ fn main() {
                     Command::PasteColumn => (
                         cursor.x,
                         cursor.x + 1,
-                        1,
+                        0,
                         db.get_row_count(&table_name).unwrap() + 1,
                     ),
                     _ => unreachable!(),

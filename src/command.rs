@@ -19,11 +19,11 @@ pub enum Command {
     ChangeCell,
     DeleteCell,
 
-    InsertToday,
+    PasteToday,
 
-    InsertColumn,
-    InsertRowAbove,
-    InsertRowBelow,
+    InsertEmptyColumn,
+    InsertEmptyRowAbove,
+    InsertEmptyRowBelow,
     DeleteLine,
     DeleteColumn,
 

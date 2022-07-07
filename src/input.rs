@@ -57,10 +57,10 @@ pub fn input(
                 Key::Char('g') => cursor.y = 1,
                 Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
 
-                Key::Char('.') => *command = Command::InsertToday,
-                Key::Char('I') => *command = Command::InsertColumn,
-                Key::Char('O') => *command = Command::InsertRowAbove,
-                Key::Char('o') => *command = Command::InsertRowBelow,
+                Key::Char('.') => *command = Command::PasteToday,
+                Key::Char('I') => *command = Command::InsertEmptyColumn,
+                Key::Char('O') => *command = Command::InsertEmptyRowAbove,
+                Key::Char('o') => *command = Command::InsertEmptyRowBelow,
 
                 Key::Char('i') => *command = Command::InsertStart,
                 Key::Char('a') => *command = Command::InsertEnd,
