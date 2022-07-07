@@ -177,3 +177,62 @@ pub(crate) fn editor_exit(
     *mode = Mode::Normal;
     Ok(())
 }
+
+// x/y is 1-indexed; start_y==0 means copy column name
+pub(crate) fn yank(
+    start_x: usize,
+    end_x: usize,
+    start_y: usize,
+    end_y: usize,
+    db: &mut Db,
+    table_name: &str,
+    clipboard_table_name: &str,
+) {
+    if start_y == 0 && end_y == 1 {
+        let column_name = get_column_name_or_generic(start_x, &*db, table_name);
+        db.create_or_replace_table(clipboard_table_name).unwrap();
+        db.create_column(clipboard_table_name, &column_name)
+            .unwrap();
+        db.insert(clipboard_table_name, vec![&column_name]).unwrap();
+    } else {
+        let columns = db.get_column_names(table_name).unwrap();
+        let v2: Vec<&str> = columns.iter().map(|s| &**s).collect();
+
+        db.select_into(
+            clipboard_table_name,
+            table_name,
+            &v2[(start_x - 1)..(end_x - 1)],
+            start_y - 1,
+            end_y - 1,
+        )
+        .unwrap();
+    }
+}
+#[allow(unused_variables)]
+pub(crate) fn paste(
+    start_x: usize,
+    end_x: usize,
+    start_y: usize,
+    end_y: usize,
+    db: &mut Db,
+    table_name: &str,
+    clipboard_table_name: &str,
+) {
+    let paste_column_header = start_y == 0 && end_y == 1;
+    let paste_overwrite_cells = start_x != 0 && start_y != 0;
+    let paste_rows = start_y == 0 && end_y != 1;
+    let paste_columns = start_x == 0;
+    if paste_column_header || paste_overwrite_cells {
+        if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
+            if paste_overwrite_cells {
+                extend_table(db, table_name, end_x - 1, end_y - 1).unwrap();
+                db.set_at(table_name, start_y - 1, start_x - 1, cell_data)
+                    .unwrap();
+            } else {
+                let new_name = cell_data.to_string();
+                let old_name = db.get_column_name_at(table_name, start_x - 1).unwrap();
+                db.rename_column(table_name, &old_name, &new_name).unwrap();
+            }
+        }
+    }
+}

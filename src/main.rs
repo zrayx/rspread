@@ -276,41 +276,59 @@ fn main() {
                     .unwrap();
                 }
             }
-            Command::YankCell => {
-                let column_name = get_column_name_or_generic(cursor.x, &db, &table_name);
-                if cursor.y == 0 {
-                    db.create_or_replace_table(clipboard_table_name).unwrap();
-                    db.create_column(clipboard_table_name, &column_name)
-                        .unwrap();
-                    db.insert(clipboard_table_name, vec![&column_name]).unwrap();
-                } else {
-                    let (start, end) = if cursor.y == 0 {
-                        (0, 0)
-                    } else {
-                        (cursor.y - 1, cursor.y)
-                    };
-                    db.select_into(
-                        clipboard_table_name,
-                        &table_name,
-                        &[&column_name],
-                        start,
-                        end,
-                    )
-                    .unwrap();
-                }
+            Command::YankCell | Command::YankRow | Command::YankColumn => {
+                let (start_x, end_x, start_y, end_y) = match command {
+                    Command::YankCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
+                    Command::YankRow => (
+                        1,
+                        db.get_column_count(&table_name).unwrap() + 1,
+                        cursor.y,
+                        cursor.y + 1,
+                    ),
+                    Command::YankColumn => (
+                        cursor.x,
+                        cursor.x + 1,
+                        1,
+                        db.get_row_count(&table_name).unwrap() + 1,
+                    ),
+                    _ => unreachable!(),
+                };
+                yank(
+                    start_x,
+                    end_x,
+                    start_y,
+                    end_y,
+                    &mut db,
+                    &table_name,
+                    clipboard_table_name,
+                )
             }
-            Command::PasteCell => {
-                if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
-                    if cursor.y > 0 {
-                        extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
-                        db.set_at(&table_name, cursor.y - 1, cursor.x - 1, cell_data)
-                            .unwrap();
-                    } else {
-                        let new_name = cell_data.to_string();
-                        let old_name = db.get_column_name_at(&table_name, cursor.x - 1).unwrap();
-                        db.rename_column(&table_name, &old_name, &new_name).unwrap();
-                    }
-                }
+            Command::PasteCell | Command::PasteRow | Command::PasteColumn => {
+                let (start_x, end_x, start_y, end_y) = match command {
+                    Command::PasteCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
+                    Command::PasteRow => (
+                        1,
+                        db.get_column_count(&table_name).unwrap() + 1,
+                        cursor.y,
+                        cursor.y + 1,
+                    ),
+                    Command::PasteColumn => (
+                        cursor.x,
+                        cursor.x + 1,
+                        1,
+                        db.get_row_count(&table_name).unwrap() + 1,
+                    ),
+                    _ => unreachable!(),
+                };
+                paste(
+                    start_x,
+                    end_x,
+                    start_y,
+                    end_y,
+                    &mut db,
+                    &table_name,
+                    clipboard_table_name,
+                )
             }
         }
 

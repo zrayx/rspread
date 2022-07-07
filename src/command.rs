@@ -28,7 +28,11 @@ pub enum Command {
     DeleteColumn,
 
     YankCell,
+    YankRow,
+    YankColumn,
     PasteCell,
+    PasteRow,
+    PasteColumn,
 }
 
 impl Command {

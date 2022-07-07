@@ -50,8 +50,10 @@ pub fn input(
                 Key::BackTab => move_cursor(cursor, -1, 0),
                 Key::Char('\n') => move_cursor(cursor, 0, 1),
 
-                Key::Char('0') => cursor.x = 1,
-                Key::Char('$') => cursor.x = db.get_column_names(table_name).unwrap().len(),
+                Key::Char('0') | Key::Home => cursor.x = 1,
+                Key::Char('$') | Key::End => {
+                    cursor.x = db.get_column_names(table_name).unwrap().len()
+                }
                 Key::Char('g') => cursor.y = 1,
                 Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
 
@@ -71,6 +73,10 @@ pub fn input(
 
                 Key::Ctrl('c') => *command = Command::YankCell,
                 Key::Ctrl('v') => *command = Command::PasteCell,
+                Key::Char('y') => *mode = Mode::Yank,
+                Key::Char('p') => *mode = Mode::Paste,
+                Key::Char('Y') => *command = Command::YankRow,
+                Key::Char('P') => *command = Command::PasteRow,
 
                 // Key::Backspace => println!("×"),
                 // Key::Esc => println!("ESC"),
@@ -114,8 +120,8 @@ pub fn input(
                         *mode = Mode::Normal;
                     }
                 }
-                Key::Ctrl('a') => editor.home(),
-                Key::Ctrl('e') => editor.end(),
+                Key::Ctrl('a') | Key::Home => editor.home(),
+                Key::Ctrl('e') | Key::End => editor.end(),
                 Key::Ctrl('u') => editor.delete_left_all(),
                 Key::Ctrl('k') => editor.delete_right_all(),
                 Key::Ctrl('w') => editor.delete_word(),
@@ -124,6 +130,32 @@ pub fn input(
                 Key::Char(c) => editor.add(c),
                 Key::Backspace | Key::Ctrl('h') => editor.backspace(),
                 Key::Delete => editor.delete(),
+                _ => {}
+            },
+
+            Mode::Yank => match c {
+                Key::Esc => *mode = Mode::Normal,
+                Key::Char('l') | Key::Char('y') => {
+                    *mode = Mode::Normal;
+                    *command = Command::YankRow;
+                }
+                Key::Char('c') => {
+                    *mode = Mode::Normal;
+                    *command = Command::YankColumn;
+                }
+                _ => {}
+            },
+
+            Mode::Paste => match c {
+                Key::Esc => *mode = Mode::Normal,
+                Key::Char('l') | Key::Char('p') => {
+                    *mode = Mode::Normal;
+                    *command = Command::PasteRow;
+                }
+                Key::Char('c') => {
+                    *mode = Mode::Normal;
+                    *command = Command::PasteColumn;
+                }
                 _ => {}
             },
 
