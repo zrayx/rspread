@@ -235,20 +235,123 @@ pub(crate) fn paste(
                 db.rename_column(table_name, &old_name, &new_name).unwrap();
             }
         }
-    } else {
-        let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
-        let clipboard_row_count = db.get_row_count(clipboard_table_name).unwrap();
+    } else if paste_rows {
         let table_column_count = db.get_column_count(table_name).unwrap();
+        let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
+        extend_table(db, table_name, clipboard_column_count, 0).unwrap();
+        extend_table(db, clipboard_table_name, table_column_count, 0).unwrap();
+        db.insert_into_at(clipboard_table_name, table_name, start_y - 1)
+            .unwrap();
+    } else if paste_columns {
+        let clipboard_row_count = db.get_row_count(clipboard_table_name).unwrap();
         let table_row_count = db.get_row_count(table_name).unwrap();
-        if paste_rows {
-            extend_table(db, table_name, table_column_count, 0).unwrap();
-            db.insert_into_at(clipboard_table_name, table_name, start_y - 1)
-                .unwrap();
-        } else if paste_columns {
-            // TODO
-            let _y = "";
-        } else {
-            unreachable!("unreachable() reached in paste()");
+        extend_table(db, table_name, 0, clipboard_row_count).unwrap();
+        extend_table(db, clipboard_table_name, 0, table_row_count).unwrap();
+        // make sure column names are unique
+        let table_columns = db.get_column_names(table_name).unwrap();
+        let mut clipboard_columns = db.get_column_names(clipboard_table_name).unwrap();
+        let old_clipboard_columns = clipboard_columns.clone();
+        let mut new_column_names = vec![];
+        for column_name in &clipboard_columns.clone() {
+            if table_columns.contains(column_name) {
+                let mut check_columns = old_clipboard_columns.clone();
+                check_columns.append(&mut new_column_names.clone());
+                let new_column_name = generate_nice_copy_name(column_name, check_columns);
+                new_column_names.push(new_column_name);
+            } else {
+                new_column_names.push(column_name.to_string());
+            }
         }
+        clipboard_columns = new_column_names;
+
+        for (i, column_name) in clipboard_columns.iter_mut().enumerate() {
+            if column_name != &old_clipboard_columns[i] {
+                db.rename_column(clipboard_table_name, &old_clipboard_columns[i], column_name)
+                    .unwrap();
+            }
+        }
+
+        db.insert_columns_at(clipboard_table_name, table_name, start_x - 1)
+            .unwrap();
+    } else {
+        unreachable!("unreachable() reached in paste()");
+    }
+}
+
+pub fn generate_nice_copy_name(from_name: &str, from_vec: Vec<String>) -> String {
+    let check_for_num = |s: &str| -> (usize, u64) {
+        let len = s.len();
+        let mut index = len - 1;
+        let s_nth = |n| s.chars().nth(n).unwrap();
+        if s.is_empty() {
+            return (len, 1);
+        }
+        if s_nth(index) != ')' {
+            return (len, 1);
+        }
+        index -= 1;
+        let mut number = 0;
+        while index > 0 && s_nth(index) >= '0' && s_nth(index) <= '9' {
+            number = number * 10 + (s_nth(index) as u64 - '0' as u64);
+            index -= 1;
+        }
+        if s_nth(index) != '(' {
+            return (len, 1);
+        }
+        (index, number)
+    };
+
+    let (index, mut copy_name_index) = check_for_num(from_name);
+    let from_name = from_name[..index].to_string();
+    loop {
+        let copy_name = format!("{}({})", from_name, copy_name_index + 1);
+        if !from_vec.contains(&copy_name) {
+            return copy_name;
+        }
+        copy_name_index += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_nice_copy_name() {
+        let from_name = "test";
+        let from_vec = vec![
+            "test(1)".to_string(),
+            "test(2)".to_string(),
+            "test(3)".to_string(),
+        ];
+        let copy_name = generate_nice_copy_name(from_name, from_vec);
+        assert_eq!(copy_name, "test(4)");
+
+        let from_name = "test(2)";
+        let from_vec = vec![
+            "test(1)".to_string(),
+            "test(2)".to_string(),
+            "test(3)".to_string(),
+        ];
+        let copy_name = generate_nice_copy_name(from_name, from_vec);
+        assert_eq!(copy_name, "test(4)");
+
+        let from_name = "test2)";
+        let from_vec = vec![
+            "test(1)".to_string(),
+            "test(2)".to_string(),
+            "test(3)".to_string(),
+        ];
+        let copy_name = generate_nice_copy_name(from_name, from_vec);
+        assert_eq!(copy_name, "test2)(2)");
+
+        let from_name = "test2";
+        let from_vec = vec![
+            "test(1)".to_string(),
+            "test(2)".to_string(),
+            "test(3)".to_string(),
+        ];
+        let copy_name = generate_nice_copy_name(from_name, from_vec);
+        assert_eq!(copy_name, "test2(2)");
     }
 }
