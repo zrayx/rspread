@@ -11,6 +11,10 @@ impl Editor {
         }
     }
 
+    fn cur_x_bytes(&self) -> usize {
+        self.line.chars().take(self.cur_x).collect::<String>().len()
+    }
+
     pub fn left(&mut self) {
         if self.cur_x > 0 {
             self.cur_x -= 1;
@@ -18,7 +22,7 @@ impl Editor {
     }
 
     pub fn right(&mut self) {
-        if self.cur_x < self.line.len() {
+        if self.cur_x < self.line.chars().count() {
             self.cur_x += 1;
         }
     }
@@ -28,11 +32,11 @@ impl Editor {
     }
 
     pub fn end(&mut self) {
-        self.cur_x = self.line.len();
+        self.cur_x = self.line.chars().count();
     }
 
     pub fn add(&mut self, ch: char) {
-        self.line.insert(self.cur_x, ch);
+        self.line.insert(self.cur_x_bytes(), ch);
         self.cur_x += 1;
     }
 
@@ -44,18 +48,18 @@ impl Editor {
     pub fn insert_at(&mut self, old_text: &str, idx: usize) {
         self.line.clear();
         self.line.push_str(old_text);
-        self.cur_x = idx.min(self.line.len());
+        self.cur_x = idx.min(self.line.chars().count());
     }
 
     pub fn backspace(&mut self) {
         if self.cur_x > 0 {
-            self.line.remove(self.cur_x - 1);
             self.cur_x -= 1;
+            self.line.remove(self.cur_x_bytes());
         }
     }
 
     pub fn delete(&mut self) {
-        self.line.remove(self.cur_x);
+        self.line.remove(self.cur_x_bytes());
     }
 
     pub fn delete_left_all(&mut self) {
@@ -65,7 +69,7 @@ impl Editor {
     }
 
     pub fn delete_right_all(&mut self) {
-        while self.cur_x < self.line.len() {
+        while self.cur_x < self.line.chars().count() {
             self.delete();
         }
     }

@@ -27,7 +27,7 @@ pub fn render(
 
     let pad = |s: &str, width: usize| {
         let mut s = s.to_string();
-        while (s.len()) < width {
+        while (s.chars().count()) < width {
             s.push(' ');
         }
         s
@@ -64,11 +64,11 @@ pub fn render(
     // get the max width of each column
     let mut column_widths: Vec<usize> = vec![];
     for column_name in &column_names_extended {
-        column_widths.push(column_name.len());
+        column_widths.push(column_name.chars().count());
     }
     for row in &table_content {
         for (idx, column) in row.iter().enumerate() {
-            let len = column.to_string().len();
+            let len = column.to_string().chars().count();
             if len > column_widths[idx] {
                 column_widths[idx] = len;
             }
@@ -103,10 +103,10 @@ pub fn render(
         let column_name = &column_names_extended[idx];
         line += &pad(column_name, column_widths[idx] + 1);
     }
-    if line.len() > terminal_width - margin_left {
+    if line.chars().count() > terminal_width - margin_left {
         line = line.chars().take(terminal_width).collect::<String>();
     } else {
-        line += &" ".repeat(terminal_width - line.len());
+        line += &" ".repeat(terminal_width - line.chars().count());
     }
     out += &format!(
         "{}{}{}{}{}{}",
@@ -203,7 +203,11 @@ pub fn render(
 
         let (line, bg) = if *mode == Mode::Insert || *mode == Mode::Command {
             (
-                format!("{}{}", prefix, pad(&editor.line, cursor_len - prefix.len())),
+                format!(
+                    "{}{}",
+                    prefix,
+                    pad(&editor.line, cursor_len - prefix.chars().count())
+                ),
                 format!("{}", Bg(Yellow)),
             )
         } else {
@@ -222,7 +226,7 @@ pub fn render(
 
         // render cursor of editor
         if *mode == Mode::Insert || *mode == Mode::Command {
-            let ch = if editor.cur_x >= editor.line.len() {
+            let ch = if editor.cur_x >= editor.line.chars().count() {
                 " ".to_string()
             } else {
                 editor.line.chars().nth(editor.cur_x).unwrap().to_string()
@@ -231,7 +235,10 @@ pub fn render(
                 "{}{}{}{}{}{}",
                 Bg(Blue),
                 Fg(Black),
-                Goto(x_pos + editor.cur_x as u16 + prefix.len() as u16, y_pos),
+                Goto(
+                    x_pos + editor.cur_x as u16 + prefix.chars().count() as u16,
+                    y_pos
+                ),
                 ch,
                 Bg(Reset),
                 Fg(Reset),
