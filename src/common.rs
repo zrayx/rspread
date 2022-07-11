@@ -160,17 +160,19 @@ pub(crate) fn editor_exit(
     if !editor.get_line().is_empty() {
         extend_table(db, table_name, cursor.x, cursor.y)?;
     }
+    let new_line = editor.get_line();
+    editor.clear(); // make sure to clear editor even if we quit with an error
     if cursor.y == 0 {
         // column name
         let old_column_name = get_column_name_or_generic(cursor.x, db, table_name);
-        let new_column_name = editor.get_line();
+        let new_column_name = new_line;
         db.rename_column(table_name, &old_column_name, &new_column_name)?;
     } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
         db.set_at(
             table_name,
             cursor.y - 1,
             cursor.x - 1,
-            Data::parse(&editor.line),
+            Data::parse(&new_line),
         )?;
     }
     editor.clear();

@@ -38,8 +38,15 @@ pub fn render(
     let margin_bottom: usize = 2; // room for status line+command line
     let terminal_width = termion::terminal_size().unwrap().0 as usize;
     let terminal_height = termion::terminal_size().unwrap().1 as usize;
-    let column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
     let table_content = db.select_from(table_name).unwrap();
+    let mut column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
+    for (idx, column_name) in &mut column_names_extended.iter_mut().enumerate() {
+        if cursor.y != 0 || idx != cursor.x - 1 {
+            if let Some(pos) = column_name.find('|') {
+                *column_name = column_name[..pos].to_string();
+            }
+        }
+    }
 
     let mut out = String::new();
     let mut offset = Pos::new(0, 0);
@@ -274,7 +281,13 @@ pub fn render(
             if x > terminal_width {
                 break;
             }
-            out += &format!("{}·", Goto(x as u16, idx_y as u16),);
+            let col_pos = Pos {
+                x: idx_x,
+                y: idx_y + offset.y - 1,
+            };
+            if *mode == Mode::Normal || col_pos != *cursor {
+                out += &format!("{}·", Goto(x as u16, idx_y as u16),);
+            }
         }
     }
 
