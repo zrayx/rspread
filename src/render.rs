@@ -258,12 +258,32 @@ pub fn render(
         );
     }
 
+    // black border horizontally around each cell
+    //out += &format!("{}", Bg(Black));
+    let last_row = table_content
+        .len()
+        .min(terminal_height - margin_top - margin_bottom - 1);
+    let last_column = if table_content.is_empty() {
+        0
+    } else {
+        table_content[0].len()
+    };
+    for idx_y in 2..=(last_row + 1) {
+        for idx_x in (offset.x + 1)..last_column {
+            let x = column_pos[idx_x] - column_pos[offset.x] + margin_left - 1;
+            if x > terminal_width {
+                break;
+            }
+            out += &format!("{}·", Goto(x as u16, idx_y as u16),);
+        }
+    }
+
     // reset color and cursor position
     out += &format!(
         "{}{}{}",
         Fg(Reset),
         Bg(Reset),
-        Goto(1, terminal_height as u16 - 1)
+        Goto(1, terminal_height as u16),
     );
 
     // output everything
