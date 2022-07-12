@@ -75,7 +75,7 @@ pub fn render(
     }
     for row in &table_content {
         for (idx, column) in row.iter().enumerate() {
-            let len = column.to_string().chars().count();
+            let len = column.no_time_seconds().chars().count();
             if len > column_widths[idx] {
                 column_widths[idx] = len;
             }
@@ -164,7 +164,7 @@ pub fn render(
             let row = &table_content[idx_y + offset.y];
             for idx_x in offset.x..num_columns {
                 let data = if idx_x < row.len() {
-                    row.select_at(idx_x).unwrap().to_string()
+                    row.select_at(idx_x).unwrap().no_time_seconds()
                 } else {
                     "".to_string()
                 };

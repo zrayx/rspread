@@ -152,7 +152,7 @@ pub(crate) fn editor_enter(
     } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
         db.select_at(table_name, cursor.x - 1, cursor.y - 1)
             .unwrap()
-            .to_string()
+            .no_time_seconds()
     } else {
         "".to_string()
     };
