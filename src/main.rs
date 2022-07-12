@@ -16,7 +16,7 @@ use mode::Mode;
 
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
-    let (mut path, mut db_name, mut table_name) = match args.len() {
+    let (mut db_dir, mut db_name, mut table_name) = match args.len() {
         1 => (
             "~/.local/rzdb".to_string(),
             "rspread".to_string(),
@@ -48,10 +48,10 @@ fn main() {
         }
     };
     // TODO: check if database exists; if it exists, return error on failure to load
-    let mut db = if let Ok(db) = Db::load(&db_name, &path) {
+    let mut db = if let Ok(db) = Db::load(&db_name, &db_dir) {
         db
     } else {
-        Db::create(&db_name, &path).unwrap()
+        Db::create(&db_name, &db_dir).unwrap()
     };
     if !db.exists(&table_name) {
         db.create_table(&table_name).unwrap();
@@ -140,18 +140,19 @@ fn main() {
                             &mut editor,
                         ),
                         "ls" => list_tables(&mut table_name, &mut cursor, &mut db, &mut mode),
+                        "lsdb" => list_databases(&mut table_name, &mut cursor, &mut db, &mut mode),
                         "drop" => {
                             drop_table(args, &mut db, &mut table_name, &mut cursor, &mut mode)
                         }
                         "cd" => {
                             if let Some(arg1) = args.next() {
                                 if let Some(arg2) = args.next() {
-                                    path = arg1.to_string();
+                                    db_dir = arg1.to_string();
                                     db_name = arg2.to_string();
                                 } else {
                                     db_name = arg1.to_string();
                                 }
-                                match Db::load(&db_name, &path) {
+                                match Db::load(&db_name, &db_dir) {
                                     Ok(new_db) => {
                                         db = new_db;
                                     }
@@ -159,7 +160,7 @@ fn main() {
                                         set_error_message(
                                             &format!(
                                                 "Could not load database as {}/{}: {}",
-                                                path, db_name, e
+                                                db_dir, db_name, e
                                             ),
                                             &mut message,
                                             &mut mode,
@@ -170,13 +171,12 @@ fn main() {
                             }
                         }
                         "pwd" => {
-                            println!("{}", path);
                             let new_table_name = ".".to_string();
                             set_table(&new_table_name, &mut table_name, &mut cursor);
                             db.create_or_replace_table(&*table_name).unwrap();
                             db.create_column(&*table_name, "name").unwrap();
                             db.create_column(&*table_name, "value").unwrap();
-                            db.insert(&table_name, vec!["database path", &path])
+                            db.insert(&table_name, vec!["database path", &db_dir])
                                 .unwrap();
                             db.insert(&table_name, vec!["database name", &db_name])
                                 .unwrap();
@@ -196,13 +196,38 @@ fn main() {
                 }
                 editor.clear();
             }
-            Command::ListTablesEnter => {
+            Command::ListTablesEnter | Command::ListDatabasesEnter => {
                 if cursor.y > 0 {
-                    if let Ok(selected_table_name) = db.select_at(&table_name, 0, cursor.y - 1) {
-                        let new_table_name = selected_table_name.to_string();
-                        if new_table_name != "." {
-                            set_table(&new_table_name, &mut table_name, &mut cursor);
-                            mode = Mode::Normal;
+                    if let Ok(selected_name) = db.select_at(&table_name, 0, cursor.y - 1) {
+                        let new_name = selected_name.to_string();
+                        if new_name != "." {
+                            match command {
+                                Command::ListDatabasesEnter => {
+                                    db_name = new_name;
+                                    match Db::load(&db_name, &db_dir) {
+                                        Ok(new_db) => {
+                                            db = new_db;
+                                        }
+                                        Err(e) => {
+                                            set_error_message(
+                                                &format!(
+                                                    "Could not load database as {}/{}: {}",
+                                                    db_dir, db_name, e
+                                                ),
+                                                &mut message,
+                                                &mut mode,
+                                            );
+                                        }
+                                    }
+                                    list_tables(&mut table_name, &mut cursor, &mut db, &mut mode);
+                                    mode = Mode::ListTables;
+                                }
+                                Command::ListTablesEnter => {
+                                    set_table(&new_name, &mut table_name, &mut cursor);
+                                    mode = Mode::Normal;
+                                }
+                                _ => unreachable!(),
+                            }
                         }
                     }
                 }
@@ -335,7 +360,7 @@ fn main() {
 
         if let Err(e) = db.save() {
             set_error_message(
-                &format!("Error saving database at {}/{}: {}", path, db_name, e),
+                &format!("Error saving database at {}/{}: {}", db_dir, db_name, e),
                 &mut message,
                 &mut mode,
             );

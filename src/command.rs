@@ -13,6 +13,7 @@ pub enum Command {
     CommandLineExit,
 
     ListTablesEnter,
+    ListDatabasesEnter,
 
     InsertStart,
     InsertEnd,

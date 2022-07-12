@@ -11,6 +11,10 @@ impl Editor {
         }
     }
 
+    pub fn len_utf8(&self) -> usize {
+        self.line.chars().count()
+    }
+
     fn cur_x_bytes(&self) -> usize {
         self.line.chars().take(self.cur_x).collect::<String>().len()
     }

@@ -7,6 +7,7 @@ pub enum Mode {
     Command,
     Delete,
     ListTables,
+    ListDatabases,
     ListReadOnly,
     Error,
 }
@@ -30,6 +31,7 @@ impl std::fmt::Display for Mode {
                 Mode::Delete => "Delete".to_string(),
                 Mode::Command => "Command".to_string(),
                 Mode::ListTables => "List Tables".to_string(),
+                Mode::ListDatabases => "List Databases".to_string(),
                 Mode::ListReadOnly => "List Temp Table".to_string(),
                 Mode::Error => "Error".to_string(),
             }

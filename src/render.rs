@@ -82,6 +82,14 @@ pub fn render(
         }
     }
 
+    // length of editor field while editing
+    if *mode == Mode::Insert {
+        let len = editor.len_utf8();
+        if len > column_widths[cursor.x - 1] {
+            column_widths[cursor.x - 1] = len;
+        }
+    }
+
     // get the position of all columns
     // the length of the array is the number of columns + 1, as it includes the first not displayed position on the right
     let mut column_pos = vec![0];
@@ -296,7 +304,7 @@ pub fn render(
         "{}{}{}",
         Fg(Reset),
         Bg(Reset),
-        Goto(1, terminal_height as u16),
+        Goto(1, terminal_height as u16 - 1),
     );
 
     // output everything
@@ -306,6 +314,21 @@ pub fn render(
 
 pub fn cleanup() {
     let mut stdout = stdout().into_raw_mode().unwrap();
-    write!(stdout, "{}", termion::cursor::Show).unwrap();
+    let (terminal_width, terminal_height) = termion::terminal_size().unwrap();
+    let spaces = " ".repeat(terminal_width as usize);
+    // reset color and cursor position
+    write!(
+        stdout,
+        "{}{}{}{}{}{}{}{}",
+        Fg(Reset),
+        Bg(Reset),
+        Goto(1, terminal_height - 2),
+        spaces,
+        Goto(1, terminal_height - 1),
+        spaces,
+        Goto(1, terminal_height),
+        termion::cursor::Show
+    )
+    .unwrap();
     stdout.flush().unwrap();
 }

@@ -98,6 +98,24 @@ pub(crate) fn list_tables(
     *mode = Mode::ListTables;
 }
 
+pub(crate) fn list_databases(
+    table_name: &mut String,
+    cursor: &mut pos::Pos,
+    db: &mut Db,
+    mode: &mut Mode,
+) {
+    let new_table_name = ".".to_string();
+    set_table(&new_table_name, table_name, cursor);
+    db.create_or_replace_table(&*table_name).unwrap();
+    db.create_column(&*table_name, "name").unwrap();
+    let mut database_names = db.get_database_names().unwrap();
+    database_names.sort();
+    for database in database_names {
+        db.insert(&*table_name, vec![&database]).unwrap();
+    }
+    *mode = Mode::ListDatabases;
+}
+
 pub(crate) fn extend_table(
     db: &mut Db,
     table_name: &str,
@@ -166,7 +184,9 @@ pub(crate) fn editor_exit(
         // column name
         let old_column_name = get_column_name_or_generic(cursor.x, db, table_name);
         let new_column_name = new_line;
-        db.rename_column(table_name, &old_column_name, &new_column_name)?;
+        if old_column_name != new_column_name {
+            db.rename_column(table_name, &old_column_name, &new_column_name)?;
+        }
     } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
         db.set_at(
             table_name,
