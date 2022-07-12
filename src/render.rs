@@ -8,9 +8,9 @@ use termion::raw::IntoRawMode;
 #[allow(unused_imports)]
 use termion::raw::RawTerminal;
 
-use rzdb::Db;
+use rzdb::{Data, Db};
 
-use crate::common;
+use crate::common::{self, is_cell};
 use crate::editor::Editor;
 use crate::mode::Mode;
 use crate::pos::Pos;
@@ -54,10 +54,35 @@ pub fn render(
     out += &format!("{}{}", termion::cursor::Hide, termion::clear::All);
 
     // status line
-    let line = format!(
-        "Table: {}, Cur: ({},{}), {}",
-        table_name, cursor.x, cursor.y, mode
-    );
+    let line = if cursor.y == 0 {
+        format!(
+            "Table: {}, Cur: ({},{}), {}, {}",
+            table_name,
+            cursor.x,
+            cursor.y,
+            mode,
+            column_names_extended[cursor.x - 1]
+        )
+    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
+        let cell = table_content[cursor.y - 1].select_at(cursor.x - 1).unwrap();
+        let data_type_string = match cell {
+            Data::Int(_) => "int",
+            Data::Float(_) => "float",
+            Data::String(_) => "string",
+            Data::Date(_) => "date",
+            Data::Time(_) => "time",
+            Data::Empty => "empty",
+        };
+        format!(
+            "Table: {}, Cur: ({},{}), {}, {}:{}",
+            table_name, cursor.x, cursor.y, mode, data_type_string, cell
+        )
+    } else {
+        format!(
+            "Table: {}, Cur: ({},{}), {}",
+            table_name, cursor.x, cursor.y, mode
+        )
+    };
     let line = line.chars().take(terminal_width).collect::<String>();
     out += &format!(
         "{}{}{}{}{}",
