@@ -372,33 +372,13 @@ fn main() {
                     clipboard_table_name,
                 )
             }
-            Command::PasteCell | Command::PasteRow | Command::PasteColumn => {
-                let (start_x, end_x, start_y, end_y) = match command {
-                    Command::PasteCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
-                    Command::PasteRow => (
-                        0,
-                        db.get_column_count(&table_name).unwrap() + 1,
-                        cursor.y,
-                        cursor.y + 1,
-                    ),
-                    Command::PasteColumn => (
-                        cursor.x,
-                        cursor.x + 1,
-                        0,
-                        db.get_row_count(&table_name).unwrap() + 1,
-                    ),
-                    _ => unreachable!(),
-                };
-                paste(
-                    start_x,
-                    end_x,
-                    start_y,
-                    end_y,
-                    &mut db,
-                    &table_name,
-                    clipboard_table_name,
-                )
-            }
+            Command::PasteReplace | Command::PasteBefore | Command::PasteAfter => paste(
+                &mut db,
+                &table_name,
+                clipboard_table_name,
+                &mut cursor,
+                &command,
+            ),
         }
 
         if let Err(e) = db.save() {

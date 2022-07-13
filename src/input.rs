@@ -72,11 +72,11 @@ pub fn input(
                 Key::Char(':') => *command = Command::CommandLineEnter,
 
                 Key::Ctrl('c') => *command = Command::YankCell,
-                Key::Ctrl('v') => *command = Command::PasteCell,
+                Key::Ctrl('v') => *command = Command::PasteReplace,
                 Key::Char('y') => *mode = Mode::Yank,
-                Key::Char('p') => *mode = Mode::Paste,
+                Key::Char('p') => *command = Command::PasteAfter,
                 Key::Char('Y') => *command = Command::YankRow,
-                Key::Char('P') => *command = Command::PasteRow,
+                Key::Char('P') => *command = Command::PasteBefore,
 
                 // Key::Backspace => println!("×"),
                 // Key::Esc => println!("ESC"),
@@ -142,19 +142,6 @@ pub fn input(
                 Key::Char('c') => {
                     *mode = Mode::Normal;
                     *command = Command::YankColumn;
-                }
-                _ => {}
-            },
-
-            Mode::Paste => match c {
-                Key::Esc => *mode = Mode::Normal,
-                Key::Char('l') | Key::Char('p') => {
-                    *mode = Mode::Normal;
-                    *command = Command::PasteRow;
-                }
-                Key::Char('c') => {
-                    *mode = Mode::Normal;
-                    *command = Command::PasteColumn;
                 }
                 _ => {}
             },

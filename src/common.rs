@@ -1,3 +1,4 @@
+use crate::command::Command;
 use crate::editor;
 use crate::mode::Mode;
 use crate::pos::{self, Pos};
@@ -232,39 +233,70 @@ pub(crate) fn yank(
 }
 #[allow(unused_variables)]
 pub(crate) fn paste(
-    start_x: usize,
-    end_x: usize,
-    start_y: usize,
-    end_y: usize,
     db: &mut Db,
     table_name: &str,
     clipboard_table_name: &str,
+    cursor: &mut pos::Pos,
+    command: &Command,
 ) {
-    let paste_column_header = start_y == 0 && end_y == 1;
-    let paste_overwrite_cells = start_x != 0 && start_y != 0;
-    let paste_rows = start_x == 0;
-    let paste_columns = start_y == 0 && end_y != 1;
-    // TODO: paste all data, not only one cell
-    if paste_column_header || paste_overwrite_cells {
+    let clip_rows_num = db.get_row_count(clipboard_table_name).unwrap();
+    let clip_cols_num = db.get_column_count(clipboard_table_name).unwrap();
+    let table_rows_num = db.get_row_count(table_name).unwrap();
+    let table_cols_num = db.get_column_count(table_name).unwrap();
+
+    let paste_overwrite_cells = *command == Command::PasteReplace;
+    let paste_insert_cells = !paste_overwrite_cells;
+    let paste_column_header =
+        cursor.y == 0 && !paste_insert_cells && clip_cols_num == 1 && clip_rows_num == 1;
+    let insert_columns = paste_insert_cells
+        && (cursor.y == 0 || (table_cols_num > 1 && clip_cols_num == 1 && clip_rows_num > 1));
+    let insert_rows = !paste_column_header && !insert_columns;
+    let insert_after = *command == Command::PasteAfter;
+
+    if paste_column_header {
         if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
-            if paste_overwrite_cells {
-                extend_table(db, table_name, end_x - 1, end_y - 1).unwrap();
-                db.set_at(table_name, start_y - 1, start_x - 1, cell_data)
-                    .unwrap();
-            } else {
-                let new_name = cell_data.to_string();
-                let old_name = db.get_column_name_at(table_name, start_x - 1).unwrap();
+            let new_name = cell_data.to_string();
+            let old_name = db.get_column_name_at(table_name, cursor.x - 1).unwrap();
+            if old_name != new_name {
                 db.rename_column(table_name, &old_name, &new_name).unwrap();
             }
         }
-    } else if paste_rows {
+        return;
+    }
+
+    // calculate paste range, indexs are 0-indexed
+    let (start_x, start_y) = if insert_columns {
+        (cursor.x - 1 + if insert_after { 1 } else { 0 }, 0)
+    } else if insert_rows {
+        (0, cursor.y - 1 + if insert_after { 1 } else { 0 })
+    } else {
+        (cursor.x - 1, cursor.y - 1)
+    };
+    let (end_x, end_y) = (start_x + clip_cols_num, start_y + clip_rows_num);
+
+    // TODO: paste all data, not only one cell
+    if paste_overwrite_cells {
+        if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
+            extend_table(db, table_name, end_x, end_y).unwrap();
+            db.set_at(table_name, start_y, start_x, cell_data).unwrap();
+        }
+    } else if insert_rows {
         let table_column_count = db.get_column_count(table_name).unwrap();
         let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
+        if cursor.y > table_rows_num {
+            extend_table(
+                db,
+                table_name,
+                0,
+                cursor.y - 1 + if insert_after { 1 } else { 0 },
+            )
+            .unwrap();
+        }
         extend_table(db, table_name, clipboard_column_count, 0).unwrap();
         extend_table(db, clipboard_table_name, table_column_count, 0).unwrap();
-        db.insert_into_at(clipboard_table_name, table_name, start_y - 1)
+        db.insert_into_at(clipboard_table_name, table_name, start_y)
             .unwrap();
-    } else if paste_columns {
+    } else if insert_columns {
         let clipboard_row_count = db.get_row_count(clipboard_table_name).unwrap();
         let table_row_count = db.get_row_count(table_name).unwrap();
         extend_table(db, table_name, 0, clipboard_row_count).unwrap();
@@ -277,6 +309,7 @@ pub(crate) fn paste(
         for column_name in &clipboard_columns.clone() {
             if table_columns.contains(column_name) {
                 let mut check_columns = old_clipboard_columns.clone();
+                check_columns.append(&mut table_columns.clone());
                 check_columns.append(&mut new_column_names.clone());
                 let new_column_name = generate_nice_copy_name(column_name, check_columns);
                 new_column_names.push(new_column_name);
@@ -293,8 +326,16 @@ pub(crate) fn paste(
             }
         }
 
-        db.insert_columns_at(clipboard_table_name, table_name, start_x - 1)
+        db.insert_columns_at(clipboard_table_name, table_name, start_x)
             .unwrap();
+
+        if insert_after {
+            if insert_rows {
+                cursor.y += 1;
+            } else if insert_columns {
+                cursor.x += 1;
+            }
+        }
     } else {
         unreachable!("unreachable() reached in paste()");
     }
@@ -302,14 +343,14 @@ pub(crate) fn paste(
 
 pub fn generate_nice_copy_name(from_name: &str, from_vec: Vec<String>) -> String {
     let check_for_num = |s: &str| -> (usize, u64) {
-        let len = s.len();
-        let mut index = len - 1;
+        let len_utf8 = s.chars().count();
+        let mut index = len_utf8 - 1;
         let s_nth = |n| s.chars().nth(n).unwrap();
         if s.is_empty() {
-            return (len, 1);
+            return (len_utf8, 1);
         }
         if s_nth(index) != ')' {
-            return (len, 1);
+            return (len_utf8, 1);
         }
         index -= 1;
         let mut number = 0;
@@ -318,13 +359,13 @@ pub fn generate_nice_copy_name(from_name: &str, from_vec: Vec<String>) -> String
             index -= 1;
         }
         if s_nth(index) != '(' {
-            return (len, 1);
+            return (len_utf8, 1);
         }
         (index, number)
     };
 
     let (index, mut copy_name_index) = check_for_num(from_name);
-    let from_name = from_name[..index].to_string();
+    let from_name = from_name.chars().take(index).collect::<String>();
     loop {
         let copy_name = format!("{}({})", from_name, copy_name_index + 1);
         if !from_vec.contains(&copy_name) {

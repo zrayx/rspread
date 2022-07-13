@@ -31,9 +31,9 @@ pub enum Command {
     YankCell,
     YankRow,
     YankColumn,
-    PasteCell,
-    PasteRow,
-    PasteColumn,
+    PasteReplace,
+    PasteBefore,
+    PasteAfter,
 }
 
 impl Command {
