@@ -250,16 +250,16 @@ pub(crate) fn paste(
         cursor.y == 0 && !paste_insert_cells && clip_cols_num == 1 && clip_rows_num == 1;
     let insert_columns = paste_insert_cells
         && (cursor.y == 0 || (table_cols_num > 1 && clip_cols_num == 1 && clip_rows_num > 1));
-    let insert_rows = !paste_column_header && !insert_columns;
+    let insert_rows = !paste_overwrite_cells && !paste_column_header && !insert_columns;
     let insert_after = *command == Command::PasteAfter;
 
     if paste_column_header {
         if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
             let new_name = cell_data.to_string();
             let old_name = db.get_column_name_at(table_name, cursor.x - 1).unwrap();
-            if old_name != new_name {
-                db.rename_column(table_name, &old_name, &new_name).unwrap();
-            }
+            let check_columns = db.get_column_names(table_name).unwrap();
+            let new_name = generate_nice_copy_name(&new_name, check_columns);
+            db.rename_column(table_name, &old_name, &new_name).unwrap();
         }
         return;
     }

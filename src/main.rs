@@ -316,6 +316,16 @@ fn main() {
                 cursor.y += 1;
             }
             Command::DeleteCell => {
+                let (x, y) = (cursor.x, cursor.y);
+                yank(
+                    x,
+                    x + 1,
+                    y,
+                    y + 1,
+                    &mut db,
+                    &table_name,
+                    clipboard_table_name,
+                );
                 if cursor.y > 0 {
                     if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
                         db.set_at(&table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
@@ -330,6 +340,16 @@ fn main() {
             }
             Command::DeleteLine => {
                 if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
+                    let num_columns = db.get_column_count(&table_name).unwrap();
+                    yank(
+                        1,
+                        num_columns,
+                        cursor.y,
+                        cursor.y + 1,
+                        &mut db,
+                        &table_name,
+                        clipboard_table_name,
+                    );
                     db.delete_row_at(&table_name, cursor.y - 1).unwrap();
                 }
                 if cursor.y > 1 && cursor.y > db.get_row_count(&table_name).unwrap() {
@@ -338,6 +358,16 @@ fn main() {
             }
             Command::DeleteColumn => {
                 if is_cell(&db, &table_name, cursor.x - 1, 0) {
+                    let num_rows = db.get_row_count(&table_name).unwrap();
+                    yank(
+                        cursor.x,
+                        cursor.x + 1,
+                        1,
+                        num_rows,
+                        &mut db,
+                        &table_name,
+                        clipboard_table_name,
+                    );
                     db.delete_column(
                         &table_name,
                         &db.get_column_name_at(&table_name, cursor.x - 1).unwrap(),
