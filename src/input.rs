@@ -16,6 +16,9 @@ fn move_cursor(cursor: &mut Pos, dx: i16, dy: i16) {
     let new_y = cursor.y as i16 + dy;
     cursor.x = if new_x < 1 { 1 } else { new_x as usize };
     cursor.y = if new_y < 0 { 0 } else { new_y as usize };
+    if dy < -2 && cursor.y == 0 {
+        cursor.y = 1;
+    }
 }
 
 #[allow(unused_variables)]
@@ -30,6 +33,7 @@ pub fn input(
 ) {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
+    let window_height = termion::terminal_size().unwrap().1 as i16;
     *command = Command::None;
     //let c = stdin.keys().next().unwrap();
     if let Some(c) = stdin.keys().next() {
@@ -49,6 +53,10 @@ pub fn input(
                 Key::Char('\t') => move_cursor(cursor, 1, 0),
                 Key::BackTab => move_cursor(cursor, -1, 0),
                 Key::Char('\n') => move_cursor(cursor, 0, 1),
+                Key::PageUp | Key::Ctrl('b') => move_cursor(cursor, 0, -(window_height - 5)),
+                Key::PageDown | Key::Ctrl('f') => move_cursor(cursor, 0, window_height - 5),
+                Key::Ctrl('u') => move_cursor(cursor, 0, -(window_height - 5) / 2),
+                Key::Ctrl('d') => move_cursor(cursor, 0, (window_height - 5) / 2),
 
                 Key::Char('0') | Key::Home => cursor.x = 1,
                 Key::Char('$') | Key::End => {
