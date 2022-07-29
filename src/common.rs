@@ -71,11 +71,16 @@ pub(crate) fn drop_table(
     table_name: &mut String,
     cursor: &mut pos::Pos,
     mode: &mut Mode,
-) {
+) -> Result<(), String> {
     if let Some(arg1) = args.next() {
         let name = arg1.to_string();
-        db.drop_table(&name).unwrap();
+        if db.drop_table(&name).is_err() {
+            return Err(format!("Table {} does not exist", name));
+        }
         list_tables(table_name, cursor, db, mode);
+        Ok(())
+    } else {
+        Err("No table name given".to_string())
     }
 }
 

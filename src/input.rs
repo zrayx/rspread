@@ -21,12 +21,13 @@ fn move_cursor(cursor: &mut Pos, dx: i16, dy: i16) {
     }
 }
 
-#[allow(unused_variables)]
+#[allow(clippy::too_many_arguments)]
 pub fn input(
     db: &rzdb::Db,
     table_name: &str,
     cursor: &mut Pos,
     command: &mut Command,
+    last_command: &mut Command,
     mode: &mut Mode,
     editor: &mut Editor,
     message: &mut String,
@@ -34,6 +35,7 @@ pub fn input(
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
     let window_height = termion::terminal_size().unwrap().1 as i16;
+    *last_command = *command;
     *command = Command::None;
     //let c = stdin.keys().next().unwrap();
     if let Some(c) = stdin.keys().next() {
@@ -41,6 +43,8 @@ pub fn input(
         match mode.clone() {
             Mode::Normal => match c {
                 Key::Char('q') => *command = Command::Quit,
+                Key::Char('.') => *command = *last_command,
+                Key::Char(':') => *command = Command::CommandLineEnter,
 
                 Key::Char('j') => move_cursor(cursor, 0, 1),
                 Key::Char('k') => move_cursor(cursor, 0, -1),
@@ -65,19 +69,17 @@ pub fn input(
                 Key::Char('g') => cursor.y = 1,
                 Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
 
-                Key::Char('.') => *command = Command::PasteToday,
+                Key::Char(',') => *command = Command::PasteToday,
                 Key::Char('I') => *command = Command::InsertEmptyColumn,
                 Key::Char('O') => *command = Command::InsertEmptyRowAbove,
                 Key::Char('o') => *command = Command::InsertEmptyRowBelow,
 
                 Key::Char('i') => *command = Command::InsertStart,
-                Key::Char('a') => *command = Command::InsertEnd,
+                Key::Char('a') | Key::Char('A') | Key::F(2) => *command = Command::InsertEnd,
                 Key::Char('x') => *command = Command::DeleteCell,
                 Key::Delete => *command = Command::DeleteCell,
                 Key::Char('d') => *mode = Mode::Delete,
                 Key::Char('C') => *command = Command::ChangeCell,
-
-                Key::Char(':') => *command = Command::CommandLineEnter,
 
                 Key::Ctrl('c') => *command = Command::YankCell,
                 Key::Ctrl('v') => *command = Command::PasteReplace,
@@ -135,8 +137,10 @@ pub fn input(
                 Key::Ctrl('w') => editor.delete_word(),
                 Key::Left | Key::Ctrl('b') => editor.left(),
                 Key::Right | Key::Ctrl('f') => editor.right(),
+                Key::Ctrl('h') => editor.word_left(),
+                Key::Ctrl('l') => editor.word_right(),
                 Key::Char(c) => editor.add(c),
-                Key::Backspace | Key::Ctrl('h') => editor.backspace(),
+                Key::Backspace => editor.backspace(),
                 Key::Delete => editor.delete(),
                 _ => {}
             },

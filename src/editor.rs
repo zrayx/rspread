@@ -31,6 +31,35 @@ impl Editor {
         }
     }
 
+    pub fn word_left(&mut self) {
+        if self.cur_x > 0 {
+            let mut i = self.cur_x;
+            while i > 0 && self.line.chars().nth(i - 1).unwrap().is_whitespace() {
+                i -= 1;
+            }
+            while i > 0 && !self.line.chars().nth(i - 1).unwrap().is_whitespace() {
+                i -= 1;
+            }
+            self.cur_x = i;
+        }
+    }
+
+    pub fn word_right(&mut self) {
+        if self.cur_x < self.line.chars().count() {
+            let mut i = self.cur_x;
+            while i < self.line.chars().count()
+                && !self.line.chars().nth(i).unwrap().is_whitespace()
+            {
+                i += 1;
+            }
+            while i < self.line.chars().count() && self.line.chars().nth(i).unwrap().is_whitespace()
+            {
+                i += 1;
+            }
+            self.cur_x = i;
+        }
+    }
+
     pub fn home(&mut self) {
         self.cur_x = 0;
     }

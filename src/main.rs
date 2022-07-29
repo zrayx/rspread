@@ -85,10 +85,11 @@ fn main() {
     }
 
     // copy & paste
-    let clipboard_table_name = "clipboard";
+    let clipboard_table_name = ".clipboard";
     // process input
     let mut cursor = pos::Pos::new(1, 1);
     let mut command = Command::new();
+    let mut last_command = Command::new();
     let mut mode = Mode::new();
     let mut editor = editor::Editor::new();
     let mut message = String::new();
@@ -107,6 +108,7 @@ fn main() {
             &table_name,
             &mut cursor,
             &mut command,
+            &mut last_command,
             &mut mode,
             &mut editor,
             &mut message,
@@ -167,8 +169,9 @@ fn main() {
             Command::CommandLineExit => {
                 let line = editor.get_line();
                 let mut args = line.split_whitespace();
-                if let Some(command) = args.next() {
-                    match command {
+                if let Some(line_command) = args.next() {
+                    match line_command {
+                        "q" => break,
                         "e" => load_table(
                             &mut args,
                             &mut table_name,
@@ -183,8 +186,13 @@ fn main() {
                         }
 
                         "drop" => {
-                            drop_table(args, &mut db, &mut table_name, &mut cursor, &mut mode);
-                            consume_inotify_events(&mut inotify, buffer);
+                            if let Err(msg) =
+                                drop_table(args, &mut db, &mut table_name, &mut cursor, &mut mode)
+                            {
+                                set_error_message(&msg, &mut message, &mut mode);
+                            } else {
+                                consume_inotify_events(&mut inotify, buffer);
+                            }
                         }
                         "cd" => {
                             if let Some(arg1) = args.next() {
@@ -227,7 +235,7 @@ fn main() {
                         }
                         _ => {
                             set_error_message(
-                                &format!("Unknown command: {}", command),
+                                &format!("Unknown command: {}", line_command),
                                 &mut message,
                                 &mut mode,
                             );
