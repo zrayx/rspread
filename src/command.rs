@@ -2,6 +2,7 @@
 pub enum Command {
     Quit,
     None,
+    PreviousFile,
 
     EditorExit,
     EditorExitLeft,

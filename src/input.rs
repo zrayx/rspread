@@ -45,6 +45,7 @@ pub fn input(
                 Key::Char('q') => *command = Command::Quit,
                 Key::Char('.') => *command = *last_command,
                 Key::Char(':') => *command = Command::CommandLineEnter,
+                Key::Char('\'') | Key::Ctrl('6') => *command = Command::PreviousFile, // Ctrl-^ can't be mapped in console
 
                 Key::Char('j') => move_cursor(cursor, 0, 1),
                 Key::Char('k') => move_cursor(cursor, 0, -1),

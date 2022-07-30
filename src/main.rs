@@ -20,6 +20,7 @@ fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
 
     let args = std::env::args().collect::<Vec<_>>();
+    let mut previous_table_name = ".clipboard".to_string();
     let (mut db_dir, mut db_name, mut table_name) = match args.len() {
         1 => (
             "~/.local/rzdb".to_string(),
@@ -126,6 +127,15 @@ fn main() {
         match command {
             Command::Quit => break,
             Command::None => {}
+            Command::PreviousFile => {
+                if previous_table_name != table_name {
+                    let tmp = table_name;
+                    table_name = previous_table_name.clone();
+                    previous_table_name = tmp;
+                    cursor = pos::Pos::new(1, 1);
+                    renew_watch_descriptor!();
+                }
+            }
             Command::InsertStart => {
                 mode = Mode::Insert;
                 common::editor_enter(&db, &table_name, &cursor, &mut editor, 0);
@@ -175,20 +185,38 @@ fn main() {
                         "e" => load_table(
                             &mut args,
                             &mut table_name,
+                            &mut previous_table_name,
                             &mut cursor,
                             &mut db,
                             &mut editor,
                         ),
-                        "ls" => list_tables(&mut table_name, &mut cursor, &mut db, &mut mode),
+                        "ls" => list_tables(
+                            &mut table_name,
+                            &mut previous_table_name,
+                            &mut cursor,
+                            &mut db,
+                            &mut mode,
+                        ),
                         "lsdb" => {
-                            list_databases(&mut table_name, &mut cursor, &mut db, &mut mode);
+                            list_databases(
+                                &mut table_name,
+                                &mut previous_table_name,
+                                &mut cursor,
+                                &mut db,
+                                &mut mode,
+                            );
                             renew_watch_descriptor!();
                         }
 
                         "drop" => {
-                            if let Err(msg) =
-                                drop_table(args, &mut db, &mut table_name, &mut cursor, &mut mode)
-                            {
+                            if let Err(msg) = drop_table(
+                                args,
+                                &mut db,
+                                &mut table_name,
+                                &mut previous_table_name,
+                                &mut cursor,
+                                &mut mode,
+                            ) {
                                 set_error_message(&msg, &mut message, &mut mode);
                             } else {
                                 consume_inotify_events(&mut inotify, buffer);
@@ -217,13 +245,24 @@ fn main() {
                                         );
                                     }
                                 }
-                                list_tables(&mut table_name, &mut cursor, &mut db, &mut mode);
+                                list_tables(
+                                    &mut table_name,
+                                    &mut previous_table_name,
+                                    &mut cursor,
+                                    &mut db,
+                                    &mut mode,
+                                );
                             }
                             renew_watch_descriptor!();
                         }
                         "pwd" => {
                             let new_table_name = ".".to_string();
-                            set_table(&new_table_name, &mut table_name, &mut cursor);
+                            set_table(
+                                &new_table_name,
+                                &mut table_name,
+                                &mut previous_table_name,
+                                &mut cursor,
+                            );
                             db.create_or_replace_table(&*table_name).unwrap();
                             db.create_column(&*table_name, "name").unwrap();
                             db.create_column(&*table_name, "value").unwrap();
@@ -270,11 +309,22 @@ fn main() {
                                             );
                                         }
                                     }
-                                    list_tables(&mut table_name, &mut cursor, &mut db, &mut mode);
+                                    list_tables(
+                                        &mut table_name,
+                                        &mut previous_table_name,
+                                        &mut cursor,
+                                        &mut db,
+                                        &mut mode,
+                                    );
                                     mode = Mode::ListTables;
                                 }
                                 Command::ListTablesEnter => {
-                                    set_table(&new_name, &mut table_name, &mut cursor);
+                                    set_table(
+                                        &new_name,
+                                        &mut table_name,
+                                        &mut previous_table_name,
+                                        &mut cursor,
+                                    );
                                     mode = Mode::Normal;
                                 }
                                 _ => unreachable!(),

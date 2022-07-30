@@ -41,7 +41,13 @@ pub(crate) fn set_error_message(new_message: &str, message: &mut String, mode: &
     *mode = Mode::Error;
 }
 
-pub(crate) fn set_table(new_table_name: &str, table_name: &mut String, cursor: &mut Pos) {
+pub(crate) fn set_table(
+    new_table_name: &str,
+    table_name: &mut String,
+    previous_table_name: &mut String,
+    cursor: &mut Pos,
+) {
+    *previous_table_name = table_name.clone();
     *table_name = new_table_name.to_string();
     *cursor = Pos::new(1, 1);
 }
@@ -49,6 +55,7 @@ pub(crate) fn set_table(new_table_name: &str, table_name: &mut String, cursor: &
 pub(crate) fn load_table(
     args: &mut std::str::SplitWhitespace,
     table_name: &mut String,
+    previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
     editor: &mut editor::Editor,
@@ -56,7 +63,7 @@ pub(crate) fn load_table(
     if let Some(arg1) = args.next() {
         // set table_name to new arg
         let new_table_name = arg1.to_string();
-        set_table(&new_table_name, table_name, cursor);
+        set_table(&new_table_name, table_name, previous_table_name, cursor);
         if !db.exists(&*table_name) {
             db.create_table(&*table_name).unwrap();
         }
@@ -69,6 +76,7 @@ pub(crate) fn drop_table(
     mut args: std::str::SplitWhitespace,
     db: &mut Db,
     table_name: &mut String,
+    previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     mode: &mut Mode,
 ) -> Result<(), String> {
@@ -77,7 +85,7 @@ pub(crate) fn drop_table(
         if db.drop_table(&name).is_err() {
             return Err(format!("Table {} does not exist", name));
         }
-        list_tables(table_name, cursor, db, mode);
+        list_tables(table_name, previous_table_name, cursor, db, mode);
         Ok(())
     } else {
         Err("No table name given".to_string())
@@ -86,12 +94,13 @@ pub(crate) fn drop_table(
 
 pub(crate) fn list_tables(
     table_name: &mut String,
+    previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
     mode: &mut Mode,
 ) {
     let new_table_name = ".".to_string();
-    set_table(&new_table_name, table_name, cursor);
+    set_table(&new_table_name, table_name, previous_table_name, cursor);
     db.create_or_replace_table(&*table_name).unwrap();
     db.create_column(&*table_name, "name").unwrap();
     let mut table_names = db.get_table_names();
@@ -106,12 +115,13 @@ pub(crate) fn list_tables(
 
 pub(crate) fn list_databases(
     table_name: &mut String,
+    previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
     mode: &mut Mode,
 ) {
     let new_table_name = ".".to_string();
-    set_table(&new_table_name, table_name, cursor);
+    set_table(&new_table_name, table_name, previous_table_name, cursor);
     db.create_or_replace_table(&*table_name).unwrap();
     db.create_column(&*table_name, "name").unwrap();
     let mut database_names = db.get_database_names().unwrap();
