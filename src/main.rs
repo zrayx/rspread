@@ -297,6 +297,14 @@ fn main() {
                                     match Db::load(&db_name, &db_dir) {
                                         Ok(new_db) => {
                                             db = new_db;
+                                            list_tables(
+                                                &mut table_name,
+                                                &mut previous_table_name,
+                                                &mut cursor,
+                                                &mut db,
+                                                &mut mode,
+                                            );
+                                            mode = Mode::ListTables;
                                         }
                                         Err(e) => {
                                             set_error_message(
@@ -309,14 +317,6 @@ fn main() {
                                             );
                                         }
                                     }
-                                    list_tables(
-                                        &mut table_name,
-                                        &mut previous_table_name,
-                                        &mut cursor,
-                                        &mut db,
-                                        &mut mode,
-                                    );
-                                    mode = Mode::ListTables;
                                 }
                                 Command::ListTablesEnter => {
                                     set_table(

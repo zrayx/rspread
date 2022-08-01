@@ -173,6 +173,13 @@ pub fn input(
                 Key::Char('k') => move_cursor(cursor, 0, -1),
                 Key::Up => move_cursor(cursor, 0, -1),
                 Key::Down => move_cursor(cursor, 0, 1),
+                Key::PageUp | Key::Ctrl('b') => move_cursor(cursor, 0, -(window_height - 5)),
+                Key::PageDown | Key::Ctrl('f') => move_cursor(cursor, 0, window_height - 5),
+                Key::Ctrl('u') => move_cursor(cursor, 0, -(window_height - 5) / 2),
+                Key::Ctrl('d') => move_cursor(cursor, 0, (window_height - 5) / 2),
+                Key::Char('g') => cursor.y = 1,
+                Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
+
                 Key::Char('\n') => match *mode {
                     Mode::ListTables => *command = Command::ListTablesEnter,
                     Mode::ListDatabases => *command = Command::ListDatabasesEnter,

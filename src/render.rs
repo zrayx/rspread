@@ -71,6 +71,7 @@ pub fn render(
             Data::String(_) => "string",
             Data::Date(_) => "date",
             Data::Time(_) => "time",
+            Data::Join(_) => "join",
             Data::Empty => "empty",
         };
         format!(
