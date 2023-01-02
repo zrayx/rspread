@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 rzdb = { path = "../rzdb" }
-termion = "*"
+termion = "2.0"
 inotify = "0.10"

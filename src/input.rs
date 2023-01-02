@@ -139,10 +139,10 @@ pub fn input(
                 Key::Ctrl('w') => editor.delete_word(),
                 Key::Left | Key::Ctrl('b') => editor.left(),
                 Key::Right | Key::Ctrl('f') => editor.right(),
-                Key::Ctrl('h') => editor.word_left(),
+                Key::Ctrl('g') => editor.word_left(),
                 Key::Ctrl('l') => editor.word_right(),
                 Key::Char(c) => editor.add(c),
-                Key::Backspace => editor.backspace(),
+                Key::Ctrl('h') | Key::Backspace => editor.backspace(),
                 Key::Delete => editor.delete(),
                 _ => {}
             },
