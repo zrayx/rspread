@@ -9,6 +9,7 @@ pub enum Command {
     EditorExitRight,
     EditorExitUp,
     EditorExitDown,
+    EditorNewLine,
 
     CommandLineEnter,
     CommandLineExit,

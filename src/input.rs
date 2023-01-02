@@ -110,7 +110,8 @@ pub fn input(
                                 Key::Char('\t') => Command::EditorExitRight,
                                 Key::BackTab => Command::EditorExitLeft,
                                 Key::Up => Command::EditorExitUp,
-                                Key::Down | Key::Char('\n') => Command::EditorExitDown,
+                                Key::Down => Command::EditorExitDown,
+                                Key::Char('\n') => Command::EditorNewLine,
                                 _ => Command::None,
                             };
                         }

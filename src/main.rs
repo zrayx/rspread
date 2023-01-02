@@ -152,7 +152,8 @@ fn main() {
             | Command::EditorExitUp
             | Command::EditorExitDown
             | Command::EditorExitLeft
-            | Command::EditorExitRight => {
+            | Command::EditorExitRight
+            | Command::EditorNewLine => {
                 mode = Mode::Normal;
                 if let Err(e) =
                     editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
@@ -168,6 +169,34 @@ fn main() {
                         cursor.y -= 1;
                     } else if command == Command::EditorExitDown {
                         cursor.y += 1;
+                    } else if command == Command::EditorNewLine
+                        && cursor.y > 0
+                        && is_cell(&db, &table_name, 0, cursor.y)
+                    {
+                        if let Err(e) = db.insert_empty_row_at(&table_name, cursor.y) {
+                            set_error_message(&e.to_string(), &mut message, &mut mode);
+                        }
+                        // set old_text to the cell's contents, or output error message
+                        let old_text = match db.select_at(&table_name, cursor.x - 1, cursor.y - 1) {
+                            Ok(cell) => cell.to_string(),
+                            Err(e) => {
+                                set_error_message(&e.to_string(), &mut message, &mut mode);
+                                String::new()
+                            }
+                        };
+
+                        let leading_spaces = old_text.chars().take_while(|c| *c == ' ').count();
+                        cursor.y += 1;
+                        // Set cell to the leading spaces of the old cell
+                        let spaces = " ".repeat(leading_spaces);
+                        if let Err(e) = db.set_at(
+                            &table_name,
+                            cursor.y - 1,
+                            cursor.x - 1,
+                            Data::String(spaces),
+                        ) {
+                            set_error_message(&e.to_string(), &mut message, &mut mode);
+                        }
                     }
                     mode = Mode::Insert;
                     editor_enter(&db, &table_name, &cursor, &mut editor, -1);
@@ -263,9 +292,9 @@ fn main() {
                                 &mut previous_table_name,
                                 &mut cursor,
                             );
-                            db.create_or_replace_table(&*table_name).unwrap();
-                            db.create_column(&*table_name, "name").unwrap();
-                            db.create_column(&*table_name, "value").unwrap();
+                            db.create_or_replace_table(&table_name).unwrap();
+                            db.create_column(&table_name, "name").unwrap();
+                            db.create_column(&table_name, "value").unwrap();
                             db.insert(&table_name, vec!["database path", &db_dir])
                                 .unwrap();
                             db.insert(&table_name, vec!["database name", &db_name])

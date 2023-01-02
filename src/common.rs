@@ -281,9 +281,9 @@ pub(crate) fn paste(
 
     // calculate paste range, indexs are 0-indexed
     let (start_x, start_y) = if insert_columns {
-        (cursor.x - 1 + if insert_after { 1 } else { 0 }, 0)
+        (cursor.x - 1 + usize::from(insert_after), 0)
     } else if insert_rows {
-        (0, cursor.y - 1 + if insert_after { 1 } else { 0 })
+        (0, cursor.y - 1 + usize::from(insert_after))
     } else {
         (cursor.x - 1, cursor.y - 1)
     };
@@ -299,13 +299,7 @@ pub(crate) fn paste(
         let table_column_count = db.get_column_count(table_name).unwrap();
         let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
         if cursor.y > table_rows_num {
-            extend_table(
-                db,
-                table_name,
-                0,
-                cursor.y - 1 + if insert_after { 1 } else { 0 },
-            )
-            .unwrap();
+            extend_table(db, table_name, 0, cursor.y - 1 + usize::from(insert_after)).unwrap();
         }
         extend_table(db, table_name, clipboard_column_count, 0).unwrap();
         extend_table(db, clipboard_table_name, table_column_count, 0).unwrap();
