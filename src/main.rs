@@ -169,10 +169,7 @@ fn main() {
                         cursor.y -= 1;
                     } else if command == Command::EditorExitDown {
                         cursor.y += 1;
-                    } else if command == Command::EditorNewLine
-                        && cursor.y > 0
-                        && is_cell(&db, &table_name, 0, cursor.y)
-                    {
+                    } else if command == Command::EditorNewLine && cursor.y > 0 {
                         if let Err(e) = db.insert_empty_row_at(&table_name, cursor.y) {
                             set_error_message(&e.to_string(), &mut message, &mut mode);
                         }
