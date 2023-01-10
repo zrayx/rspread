@@ -18,6 +18,8 @@ use mode::Mode;
 
 fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+    let mut mode = Mode::new();
+    let mut message = String::new();
 
     let args = std::env::args().collect::<Vec<_>>();
     let mut previous_table_name = ".clipboard".to_string();
@@ -52,12 +54,27 @@ fn main() {
             std::process::exit(1);
         }
     };
-    // TODO: check if database exists; if it exists, return error on failure to load
-    let mut db = if let Ok(db) = Db::load(&db_name, &db_dir) {
-        db
-    } else {
-        Db::create(&db_name, &db_dir).unwrap()
+
+    // If the database doesn't exist, create it
+    // If there was an error, e. g. parsing, exit
+    let mut db = match Db::load(&db_name, &db_dir) {
+        Ok(db) => db,
+        Err(e) => {
+            // return new database if it doesn't exist
+            if let Some(std_io_error) = e.downcast_ref::<std::io::Error>() {
+                if std_io_error.kind() == std::io::ErrorKind::NotFound {
+                    Db::create(&db_name, &db_dir).unwrap()
+                } else {
+                    println!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                println!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
     };
+
     if !db.exists(&table_name) {
         db.create_table(&table_name).unwrap();
         db.create_column(&table_name, "date").unwrap();
@@ -91,9 +108,7 @@ fn main() {
     let mut cursor = pos::Pos::new(1, 1);
     let mut command = Command::new();
     let mut last_command = Command::new();
-    let mut mode = Mode::new();
     let mut editor = editor::Editor::new();
-    let mut message = String::new();
     loop {
         // render screen
         render::render(&db, &table_name, &cursor, &mode, &editor, &message);
