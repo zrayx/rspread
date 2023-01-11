@@ -16,13 +16,16 @@ use command::Command;
 use input::input;
 use mode::Mode;
 
+const _RECENT_TABLES: &str = "recent_tables";
+
 fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
     let mut mode = Mode::new();
-    let mut message = String::new();
+    let mut status_line_message = String::new();
 
     let args = std::env::args().collect::<Vec<_>>();
     let mut previous_table_name = ".clipboard".to_string();
+    let (meta_db_dir, meta_db_name) = ("~/.local/rzdb".to_string(), ".meta".to_string());
     let (mut db_dir, mut db_name, mut table_name) = match args.len() {
         1 => (
             "~/.local/rzdb".to_string(),
@@ -52,6 +55,25 @@ fn main() {
             println!("Or   : rzdb [db_name] [table_name]");
             println!("Or   : rzdb [table_name]");
             std::process::exit(1);
+        }
+    };
+
+    // load meta database
+    let mut _meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
+        Ok(db) => db,
+        Err(e) => {
+            // return new database if it doesn't exist
+            if let Some(std_io_error) = e.downcast_ref::<std::io::Error>() {
+                if std_io_error.kind() == std::io::ErrorKind::NotFound {
+                    Db::create(&meta_db_name, &meta_db_dir).unwrap()
+                } else {
+                    println!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                println!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
     };
 
@@ -111,7 +133,14 @@ fn main() {
     let mut editor = editor::Editor::new();
     loop {
         // render screen
-        render::render(&db, &table_name, &cursor, &mode, &editor, &message);
+        render::render(
+            &db,
+            &table_name,
+            &cursor,
+            &mode,
+            &editor,
+            &status_line_message,
+        );
 
         // reset error message display
         if mode == Mode::Error {
@@ -127,15 +156,25 @@ fn main() {
             &mut last_command,
             &mut mode,
             &mut editor,
-            &mut message,
+            &mut status_line_message,
         );
 
         // reload database if files in it have changed
         let mut buffer = [0u8; 1024];
         if let Ok(events) = inotify.read_events(&mut buffer) {
             if events.last().is_some() {
-                db = Db::load(&db_name, &db_dir).unwrap();
-                set_error_message("Files changed, reloaded database", &mut message, &mut mode);
+                set_error_message(
+                    "File changed, reloading database",
+                    &mut status_line_message,
+                    &mut mode,
+                );
+                load_database(
+                    &db_name,
+                    &db_dir,
+                    &mut db,
+                    &mut status_line_message,
+                    &mut mode,
+                );
             }
         }
 
@@ -173,7 +212,7 @@ fn main() {
                 if let Err(e) =
                     editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
                 {
-                    set_error_message(&e.to_string(), &mut message, &mut mode);
+                    set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                 }
                 if command != Command::EditorExit {
                     if command == Command::EditorExitLeft && cursor.x > 1 {
@@ -186,13 +225,17 @@ fn main() {
                         cursor.y += 1;
                     } else if command == Command::EditorNewLine && cursor.y > 0 {
                         if let Err(e) = db.insert_empty_row_at(&table_name, cursor.y) {
-                            set_error_message(&e.to_string(), &mut message, &mut mode);
+                            set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                         }
                         // set old_text to the cell's contents, or output error message
                         let old_text = match db.select_at(&table_name, cursor.x - 1, cursor.y - 1) {
                             Ok(cell) => cell.to_string(),
                             Err(e) => {
-                                set_error_message(&e.to_string(), &mut message, &mut mode);
+                                set_error_message(
+                                    &e.to_string(),
+                                    &mut status_line_message,
+                                    &mut mode,
+                                );
                                 String::new()
                             }
                         };
@@ -207,7 +250,7 @@ fn main() {
                             cursor.x - 1,
                             Data::String(spaces),
                         ) {
-                            set_error_message(&e.to_string(), &mut message, &mut mode);
+                            set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                         }
                     }
                     mode = Mode::Insert;
@@ -258,7 +301,7 @@ fn main() {
                                 &mut cursor,
                                 &mut mode,
                             ) {
-                                set_error_message(&msg, &mut message, &mut mode);
+                                set_error_message(&msg, &mut status_line_message, &mut mode);
                             } else {
                                 consume_inotify_events(&mut inotify, buffer);
                             }
@@ -271,21 +314,13 @@ fn main() {
                                 } else {
                                     db_name = arg1.to_string();
                                 }
-                                match Db::load(&db_name, &db_dir) {
-                                    Ok(new_db) => {
-                                        db = new_db;
-                                    }
-                                    Err(e) => {
-                                        set_error_message(
-                                            &format!(
-                                                "Could not load database as {}/{}: {}",
-                                                db_dir, db_name, e
-                                            ),
-                                            &mut message,
-                                            &mut mode,
-                                        );
-                                    }
-                                }
+                                load_database(
+                                    &db_name,
+                                    &db_dir,
+                                    &mut db,
+                                    &mut status_line_message,
+                                    &mut mode,
+                                );
                                 list_tables(
                                     &mut table_name,
                                     &mut previous_table_name,
@@ -316,7 +351,7 @@ fn main() {
                         _ => {
                             set_error_message(
                                 &format!("Unknown command: {}", line_command),
-                                &mut message,
+                                &mut status_line_message,
                                 &mut mode,
                             );
                         }
@@ -335,29 +370,21 @@ fn main() {
                             match command {
                                 Command::ListDatabasesEnter => {
                                     db_name = new_name;
-                                    match Db::load(&db_name, &db_dir) {
-                                        Ok(new_db) => {
-                                            db = new_db;
-                                            list_tables(
-                                                &mut table_name,
-                                                &mut previous_table_name,
-                                                &mut cursor,
-                                                &mut db,
-                                                &mut mode,
-                                            );
-                                            mode = Mode::ListTables;
-                                        }
-                                        Err(e) => {
-                                            set_error_message(
-                                                &format!(
-                                                    "Could not load database as {}/{}: {}",
-                                                    db_dir, db_name, e
-                                                ),
-                                                &mut message,
-                                                &mut mode,
-                                            );
-                                        }
-                                    }
+                                    load_database(
+                                        &db_name,
+                                        &db_dir,
+                                        &mut db,
+                                        &mut status_line_message,
+                                        &mut mode,
+                                    );
+                                    list_tables(
+                                        &mut table_name,
+                                        &mut previous_table_name,
+                                        &mut cursor,
+                                        &mut db,
+                                        &mut mode,
+                                    );
+                                    mode = Mode::ListTables;
                                 }
                                 Command::ListTablesEnter => {
                                     set_table(
@@ -513,7 +540,7 @@ fn main() {
         if let Err(e) = db.save() {
             set_error_message(
                 &format!("Error saving database at {}/{}: {}", db_dir, db_name, e),
-                &mut message,
+                &mut status_line_message,
                 &mut mode,
             );
         }

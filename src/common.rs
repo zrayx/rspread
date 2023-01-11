@@ -52,6 +52,29 @@ pub(crate) fn set_table(
     *cursor = Pos::new(1, 1);
 }
 
+pub(crate) fn load_database(
+    db_name: &str,
+    db_dir: &str,
+    db: &mut Db,
+    status_line_message: &mut String,
+    mode: &mut Mode,
+) {
+    let e = Db::load(db_name, db_dir);
+    match e {
+        Ok(d) => *db = d,
+        Err(e) => {
+            let mut message = format!("Error loading database: {}", e);
+            // return new database if it doesn't exist
+            if let Some(std_io_error) = e.downcast_ref::<std::io::Error>() {
+                if std_io_error.kind() == std::io::ErrorKind::NotFound {
+                    message = format!("Database {} does not exist", db_name);
+                }
+            }
+            set_error_message(&message, status_line_message, mode);
+        }
+    };
+}
+
 pub(crate) fn load_table(
     args: &mut std::str::SplitWhitespace,
     table_name: &mut String,
