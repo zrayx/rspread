@@ -8,6 +8,7 @@ mod command;
 mod common;
 mod editor;
 mod input;
+mod meta;
 mod mode;
 mod pos;
 mod render;
@@ -15,8 +16,6 @@ mod render;
 use command::Command;
 use input::input;
 use mode::Mode;
-
-const _RECENT_TABLES: &str = "recent_tables";
 
 fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
@@ -59,7 +58,7 @@ fn main() {
     };
 
     // load meta database
-    let mut _meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
+    let meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
         Ok(db) => db,
         Err(e) => {
             // return new database if it doesn't exist
@@ -76,6 +75,8 @@ fn main() {
             }
         }
     };
+
+    meta::insert_recent_table(meta_db, &db_dir, &db_name, &table_name);
 
     // If the database doesn't exist, create it
     // If there was an error, e. g. parsing, exit
@@ -326,6 +327,12 @@ fn main() {
                                     &mut previous_table_name,
                                     &mut cursor,
                                     &mut db,
+                                    &mut mode,
+                                );
+                            } else {
+                                set_error_message(
+                                    "usage: cd [<db_dir>] <dir>",
+                                    &mut status_line_message,
                                     &mut mode,
                                 );
                             }
