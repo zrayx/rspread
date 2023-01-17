@@ -1,33 +1,38 @@
-use rzdb::Db;
+use rzdb::{Condition, ConditionType, Data, Db};
 
 const _RECENT_TABLES: &str = "recent_tables";
 
 pub(crate) fn insert_recent_table(
-    mut meta_db: Db,
+    meta_db: &mut Db,
     db_dir: &String,
     db_name: &String,
     table_name: &String,
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     // create recents table if it doesn't exist
     if !meta_db.exists(_RECENT_TABLES) {
-        meta_db.create_table(_RECENT_TABLES).unwrap();
-        meta_db.create_column(_RECENT_TABLES, "db_dir").unwrap();
-        meta_db.create_column(_RECENT_TABLES, "db_name").unwrap();
-        meta_db.create_column(_RECENT_TABLES, "table_name").unwrap();
+        meta_db.create_table(_RECENT_TABLES)?;
+        meta_db.create_column(_RECENT_TABLES, "db_dir")?;
+        meta_db.create_column(_RECENT_TABLES, "db_name")?;
+        meta_db.create_column(_RECENT_TABLES, "table_name")?;
     }
     // create recent table entry if it doesn't exist
-    let r = meta_db
-        .select_columns(_RECENT_TABLES, &["db_dir", "db_name", "table_name"])
-        .unwrap();
-    let exists = r.iter().any(|row| {
-        row.select_at(0).unwrap().to_string() == *db_dir
-            && row.select_at(1).unwrap().to_string() == *db_name
-            && row.select_at(2).unwrap().to_string() == *table_name
-    });
-    if !exists {
-        meta_db
-            .insert(_RECENT_TABLES, vec![db_dir, db_name, table_name])
-            .unwrap();
-        meta_db.save().unwrap();
-    }
+    meta_db.delete_where(
+        _RECENT_TABLES,
+        &[
+            Condition::new("db_dir", Data::String(db_dir.clone()), ConditionType::Equal),
+            Condition::new(
+                "db_name",
+                Data::String(db_name.clone()),
+                ConditionType::Equal,
+            ),
+            Condition::new(
+                "table_name",
+                Data::String(table_name.clone()),
+                ConditionType::Equal,
+            ),
+        ],
+    )?;
+    meta_db.insert_at(_RECENT_TABLES, vec![db_dir, db_name, table_name], 0)?;
+    meta_db.save()?;
+    Ok(())
 }

@@ -58,7 +58,7 @@ fn main() {
     };
 
     // load meta database
-    let meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
+    let mut meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
         Ok(db) => db,
         Err(e) => {
             // return new database if it doesn't exist
@@ -76,7 +76,7 @@ fn main() {
         }
     };
 
-    meta::insert_recent_table(meta_db, &db_dir, &db_name, &table_name);
+    meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name).unwrap();
 
     // If the database doesn't exist, create it
     // If there was an error, e. g. parsing, exit
@@ -267,14 +267,18 @@ fn main() {
                 if let Some(line_command) = args.next() {
                     match line_command {
                         "q" => break,
-                        "e" => load_table(
-                            &mut args,
-                            &mut table_name,
-                            &mut previous_table_name,
-                            &mut cursor,
-                            &mut db,
-                            &mut editor,
-                        ),
+                        "e" => {
+                            load_table(
+                                &mut args,
+                                &mut table_name,
+                                &mut previous_table_name,
+                                &mut cursor,
+                                &mut db,
+                                &mut editor,
+                            );
+                            meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name)
+                                .unwrap();
+                        }
                         "ls" => list_tables(
                             &mut table_name,
                             &mut previous_table_name,
@@ -306,6 +310,8 @@ fn main() {
                             } else {
                                 consume_inotify_events(&mut inotify, buffer);
                             }
+                            meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name)
+                                .unwrap();
                         }
                         "cd" => {
                             if let Some(arg1) = args.next() {
@@ -401,6 +407,13 @@ fn main() {
                                         &mut cursor,
                                     );
                                     mode = Mode::Normal;
+                                    meta::insert_recent_table(
+                                        &mut meta_db,
+                                        &db_dir,
+                                        &db_name,
+                                        &table_name,
+                                    )
+                                    .unwrap();
                                 }
                                 _ => unreachable!(),
                             }
