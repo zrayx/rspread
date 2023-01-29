@@ -4,6 +4,13 @@ use crate::mode::Mode;
 use crate::pos::{self, Pos};
 use rzdb::{Data, Db};
 
+pub struct Rect {
+    pub start_x: usize,
+    pub start_y: usize,
+    pub end_x: usize,
+    pub end_y: usize,
+}
+
 pub(crate) fn is_cell(db: &Db, table_name: &str, x: usize, y: usize) -> bool {
     x < db.get_column_count(table_name).unwrap() && y < db.get_row_count(table_name).unwrap()
 }
@@ -241,16 +248,14 @@ pub(crate) fn editor_exit(
 
 // x/y is 1-indexed; start_y==0 means copy column name
 pub(crate) fn yank(
-    start_x: usize,
-    end_x: usize,
-    start_y: usize,
-    end_y: usize,
+    r: Rect,
     db: &mut Db,
     table_name: &str,
     clipboard_table_name: &str,
+    clipboard: &mut arboard::Clipboard,
 ) {
-    if start_y == 0 && end_y == 1 {
-        let column_name = get_column_name_or_generic(start_x, &*db, table_name);
+    if r.start_y == 0 && r.end_y == 1 {
+        let column_name = get_column_name_or_generic(r.start_x, &*db, table_name);
         db.create_or_replace_table(clipboard_table_name).unwrap();
         db.create_column(clipboard_table_name, &column_name)
             .unwrap();
@@ -262,13 +267,38 @@ pub(crate) fn yank(
         db.select_into(
             clipboard_table_name,
             table_name,
-            &v2[(start_x - 1)..(end_x - 1)],
-            start_y - 1,
-            end_y - 1,
+            &v2[(r.start_x - 1)..(r.end_x - 1)],
+            r.start_y - 1,
+            r.end_y - 1,
         )
         .unwrap();
     }
+
+    clipboard_to_clipboard(db, clipboard_table_name, clipboard);
 }
+
+fn clipboard_to_clipboard(
+    db: &mut Db,
+    clipboard_table_name: &str,
+    clipboard: &mut arboard::Clipboard,
+) {
+    if let Ok(rows) = db.select_from(clipboard_table_name) {
+        let mut clipboard_string = String::new();
+        for (i, row) in rows.iter().enumerate() {
+            if i > 0 {
+                clipboard_string.push('\n');
+            }
+            for (i, cell) in row.iter().enumerate() {
+                if i > 0 {
+                    clipboard_string.push('\t');
+                }
+                clipboard_string.push_str(&cell.to_string());
+            }
+        }
+        clipboard.set_text(clipboard_string).unwrap();
+    }
+}
+
 #[allow(unused_variables)]
 pub(crate) fn paste(
     db: &mut Db,

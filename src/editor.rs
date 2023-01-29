@@ -1,3 +1,5 @@
+use arboard::Clipboard;
+
 pub struct Editor {
     pub line: String,
     pub cur_x: usize,
@@ -69,8 +71,14 @@ impl Editor {
     }
 
     pub fn add(&mut self, ch: char) {
-        self.line.insert(self.cur_x_bytes(), ch);
-        self.cur_x += 1;
+        let s = match ch {
+            '\t' => "    ".to_string(),
+            '\r' => " ".to_string(),
+            '\n' => " ".to_string(),
+            _ => ch.to_string(),
+        };
+        self.line.insert_str(self.cur_x_bytes(), &s);
+        self.cur_x += s.chars().count();
     }
 
     pub fn clear(&mut self) {
@@ -132,5 +140,14 @@ impl Editor {
 
     pub fn get_line(&self) -> String {
         self.line.clone()
+    }
+
+    pub fn insert_clipboard(&mut self) {
+        let mut clipboard = Clipboard::new().unwrap();
+        if let Ok(text) = clipboard.get_text() {
+            for s in text.chars() {
+                self.add(s);
+            }
+        }
     }
 }

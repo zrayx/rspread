@@ -1,3 +1,4 @@
+use arboard::Clipboard;
 use inotify::{Inotify, WatchMask};
 
 use rzdb::{time::Date, Data, Db};
@@ -19,6 +20,7 @@ use mode::Mode;
 
 fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+    let mut clipboard = Clipboard::new().expect("Failed to initialize clipboard");
     let mut mode = Mode::new();
     let mut status_line_message = String::new();
 
@@ -464,13 +466,16 @@ fn main() {
             Command::DeleteCell => {
                 let (x, y) = (cursor.x, cursor.y);
                 yank(
-                    x,
-                    x + 1,
-                    y,
-                    y + 1,
+                    Rect {
+                        start_x: x,
+                        end_x: x + 1,
+                        start_y: y,
+                        end_y: y + 1,
+                    },
                     &mut db,
                     &table_name,
                     clipboard_table_name,
+                    &mut clipboard,
                 );
                 if cursor.y > 0 {
                     if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
@@ -488,13 +493,16 @@ fn main() {
                 if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
                     let num_columns = db.get_column_count(&table_name).unwrap();
                     yank(
-                        1,
-                        num_columns,
-                        cursor.y,
-                        cursor.y + 1,
+                        Rect {
+                            start_x: 1,
+                            end_x: num_columns,
+                            start_y: cursor.y,
+                            end_y: cursor.y + 1,
+                        },
                         &mut db,
                         &table_name,
                         clipboard_table_name,
+                        &mut clipboard,
                     );
                     db.delete_row_at(&table_name, cursor.y - 1).unwrap();
                 }
@@ -506,13 +514,16 @@ fn main() {
                 if is_cell(&db, &table_name, cursor.x - 1, 0) {
                     let num_rows = db.get_row_count(&table_name).unwrap();
                     yank(
-                        cursor.x,
-                        cursor.x + 1,
-                        1,
-                        num_rows,
+                        Rect {
+                            start_x: cursor.x,
+                            end_x: cursor.x + 1,
+                            start_y: 1,
+                            end_y: num_rows,
+                        },
                         &mut db,
                         &table_name,
                         clipboard_table_name,
+                        &mut clipboard,
                     );
                     db.delete_column(
                         &table_name,
@@ -539,13 +550,16 @@ fn main() {
                     _ => unreachable!(),
                 };
                 yank(
-                    start_x,
-                    end_x,
-                    start_y,
-                    end_y,
+                    Rect {
+                        start_x,
+                        end_x,
+                        start_y,
+                        end_y,
+                    },
                     &mut db,
                     &table_name,
                     clipboard_table_name,
+                    &mut clipboard,
                 )
             }
             Command::PasteReplace | Command::PasteBefore | Command::PasteAfter => paste(

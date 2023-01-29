@@ -132,6 +132,7 @@ pub fn input(
                         *mode = Mode::Normal;
                     }
                 }
+                Key::Ctrl('v') => editor.insert_clipboard(),
                 Key::Ctrl('a') | Key::Home => editor.home(),
                 Key::Ctrl('e') | Key::End => editor.end(),
                 Key::Ctrl('u') => editor.delete_left_all(),
