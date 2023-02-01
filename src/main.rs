@@ -256,8 +256,12 @@ fn main() {
                             set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                         }
                     }
-                    mode = Mode::Insert;
-                    editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                    if command == Command::EditorNewLine && cursor.y == 0 {
+                        mode = Mode::Normal;
+                    } else {
+                        mode = Mode::Insert;
+                        editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                    }
                 }
             }
             Command::CommandLineEnter => {
