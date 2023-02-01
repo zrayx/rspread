@@ -33,6 +33,26 @@ impl Editor {
         }
     }
 
+    pub fn indent_left(&mut self) {
+        let indent_size = 2;
+        let s: String = self.line.chars().take(indent_size).collect();
+        for i in s.chars() {
+            if i != ' ' {
+                return;
+            }
+            self.line.remove(0);
+            if self.cur_x > 0 {
+                self.cur_x -= 1;
+            }
+        }
+    }
+
+    pub fn indent_right(&mut self) {
+        let indent_size = 2;
+        self.line.insert_str(0, &" ".repeat(indent_size));
+        self.cur_x += indent_size;
+    }
+
     pub fn word_left(&mut self) {
         if self.cur_x > 0 {
             let mut i = self.cur_x;

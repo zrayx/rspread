@@ -29,6 +29,8 @@ pub enum Command {
     InsertEmptyRowBelow,
     DeleteLine,
     DeleteColumn,
+    IndentLeft,
+    IndentRight,
 
     YankCell,
     YankRow,

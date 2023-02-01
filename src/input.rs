@@ -70,6 +70,9 @@ pub fn input(
                 Key::Char('g') => cursor.y = 1,
                 Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
 
+                Key::Char('<') => *command = Command::IndentLeft,
+                Key::Char('>') => *command = Command::IndentRight,
+
                 Key::Char(',') => *command = Command::PasteToday,
                 Key::Char('I') => *command = Command::InsertEmptyColumn,
                 Key::Char('O') => *command = Command::InsertEmptyRowAbove,
@@ -140,6 +143,8 @@ pub fn input(
                 Key::Ctrl('w') => editor.delete_word(),
                 Key::Left | Key::Ctrl('b') => editor.left(),
                 Key::Right | Key::Ctrl('f') => editor.right(),
+                Key::Ctrl('d') => editor.indent_left(),
+                Key::Ctrl('t') => editor.indent_right(),
                 Key::Ctrl('g') => editor.word_left(),
                 Key::Ctrl('l') => editor.word_right(),
                 Key::Char(c) => editor.add(c),

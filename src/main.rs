@@ -536,6 +536,25 @@ fn main() {
                     .unwrap();
                 }
             }
+
+            Command::IndentLeft | Command::IndentRight => {
+                editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                if command == Command::IndentLeft {
+                    editor.indent_left();
+                } else {
+                    editor.indent_right();
+                }
+                if let Err(e) =
+                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
+                {
+                    set_error_message(
+                        &format!("Error in indentation: {}", e),
+                        &mut status_line_message,
+                        &mut mode,
+                    );
+                }
+            }
+
             Command::YankCell | Command::YankRow | Command::YankColumn => {
                 let (start_x, end_x, start_y, end_y) = match command {
                     Command::YankCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
