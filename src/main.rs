@@ -18,16 +18,24 @@ use command::Command;
 use input::input;
 use mode::Mode;
 
+struct State {
+    db_dir: String,
+}
+
 fn main() {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
     let mut clipboard = Clipboard::new().expect("Failed to initialize clipboard");
     let mut mode = Mode::new();
     let mut status_line_message = String::new();
 
+    let mut state = State {
+        db_dir: "~/.local/rzdb".to_string(),
+    };
+
     let args = std::env::args().collect::<Vec<_>>();
     let mut previous_table_name = ".clipboard".to_string();
     let (meta_db_dir, meta_db_name) = ("~/.local/rzdb".to_string(), ".meta".to_string());
-    let (mut db_dir, mut db_name, mut table_name) = match args.len() {
+    let (db_dir, mut db_name, mut table_name) = match args.len() {
         1 => (
             "~/.local/rzdb".to_string(),
             "rspread".to_string(),
@@ -58,6 +66,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    state.db_dir = db_dir;
 
     // load meta database
     let mut meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
@@ -78,17 +87,17 @@ fn main() {
         }
     };
 
-    meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name).unwrap();
+    meta::insert_recent_table(&mut meta_db, &state, &db_name, &table_name).unwrap();
 
     // If the database doesn't exist, create it
     // If there was an error, e. g. parsing, exit
-    let mut db = match Db::load(&db_name, &db_dir) {
+    let mut db = match Db::load(&db_name, &state.db_dir) {
         Ok(db) => db,
         Err(e) => {
             // return new database if it doesn't exist
             if let Some(std_io_error) = e.downcast_ref::<std::io::Error>() {
                 if std_io_error.kind() == std::io::ErrorKind::NotFound {
-                    Db::create(&db_name, &db_dir).unwrap()
+                    Db::create(&db_name, &state.db_dir).unwrap()
                 } else {
                     println!("Error: {}", e);
                     std::process::exit(1);
@@ -173,7 +182,7 @@ fn main() {
                 );
                 load_database(
                     &db_name,
-                    &db_dir,
+                    &state.db_dir,
                     &mut db,
                     &mut status_line_message,
                     &mut mode,
@@ -282,7 +291,7 @@ fn main() {
                                 &mut db,
                                 &mut editor,
                             );
-                            meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name)
+                            meta::insert_recent_table(&mut meta_db, &state, &db_name, &table_name)
                                 .unwrap();
                         }
                         "ls" => list_tables(
@@ -316,20 +325,20 @@ fn main() {
                             } else {
                                 consume_inotify_events(&mut inotify, buffer);
                             }
-                            meta::insert_recent_table(&mut meta_db, &db_dir, &db_name, &table_name)
+                            meta::insert_recent_table(&mut meta_db, &state, &db_name, &table_name)
                                 .unwrap();
                         }
                         "cd" => {
                             if let Some(arg1) = args.next() {
                                 if let Some(arg2) = args.next() {
-                                    db_dir = arg1.to_string();
+                                    state.db_dir = arg1.to_string();
                                     db_name = arg2.to_string();
                                 } else {
                                     db_name = arg1.to_string();
                                 }
                                 load_database(
                                     &db_name,
-                                    &db_dir,
+                                    &state.db_dir,
                                     &mut db,
                                     &mut status_line_message,
                                     &mut mode,
@@ -361,7 +370,7 @@ fn main() {
                             db.create_or_replace_table(&table_name).unwrap();
                             db.create_column(&table_name, "name").unwrap();
                             db.create_column(&table_name, "value").unwrap();
-                            db.insert(&table_name, vec!["database path", &db_dir])
+                            db.insert(&table_name, vec!["database path", &state.db_dir])
                                 .unwrap();
                             db.insert(&table_name, vec!["database name", &db_name])
                                 .unwrap();
@@ -391,7 +400,7 @@ fn main() {
                                     db_name = new_name;
                                     load_database(
                                         &db_name,
-                                        &db_dir,
+                                        &state.db_dir,
                                         &mut db,
                                         &mut status_line_message,
                                         &mut mode,
@@ -415,7 +424,7 @@ fn main() {
                                     mode = Mode::Normal;
                                     meta::insert_recent_table(
                                         &mut meta_db,
-                                        &db_dir,
+                                        &state,
                                         &db_name,
                                         &table_name,
                                     )
@@ -596,7 +605,10 @@ fn main() {
 
         if let Err(e) = db.save() {
             set_error_message(
-                &format!("Error saving database at {}/{}: {}", db_dir, db_name, e),
+                &format!(
+                    "Error saving database at {}/{}: {}",
+                    state.db_dir, db_name, e
+                ),
                 &mut status_line_message,
                 &mut mode,
             );

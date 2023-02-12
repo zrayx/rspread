@@ -1,10 +1,11 @@
+use crate::State;
 use rzdb::{Condition, ConditionType, Data, Db};
 
 const _RECENT_TABLES: &str = "recent_tables";
 
 pub(crate) fn insert_recent_table(
     meta_db: &mut Db,
-    db_dir: &String,
+    state: &State,
     db_name: &String,
     table_name: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -19,7 +20,11 @@ pub(crate) fn insert_recent_table(
     meta_db.delete_where(
         _RECENT_TABLES,
         &[
-            Condition::new("db_dir", Data::String(db_dir.clone()), ConditionType::Equal),
+            Condition::new(
+                "db_dir",
+                Data::String(state.db_dir.clone()),
+                ConditionType::Equal,
+            ),
             Condition::new(
                 "db_name",
                 Data::String(db_name.clone()),
@@ -32,7 +37,7 @@ pub(crate) fn insert_recent_table(
             ),
         ],
     )?;
-    meta_db.insert_at(_RECENT_TABLES, vec![db_dir, db_name, table_name], 0)?;
+    meta_db.insert_at(_RECENT_TABLES, vec![&state.db_dir, db_name, table_name], 0)?;
     meta_db.save()?;
     Ok(())
 }
