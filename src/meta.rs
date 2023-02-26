@@ -6,7 +6,6 @@ const _RECENT_TABLES: &str = "recent_tables";
 pub(crate) fn insert_recent_table(
     meta_db: &mut Db,
     state: &State,
-    table_name: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // create recents table if it doesn't exist
     if !meta_db.exists(_RECENT_TABLES) {
@@ -31,14 +30,14 @@ pub(crate) fn insert_recent_table(
             ),
             Condition::new(
                 "table_name",
-                Data::String(table_name.clone()),
+                Data::String(state.table_name.clone()),
                 ConditionType::Equal,
             ),
         ],
     )?;
     meta_db.insert_at(
         _RECENT_TABLES,
-        vec![&state.db_dir, &state.db_name, table_name],
+        vec![&state.db_dir, &state.db_name, &state.table_name],
         0,
     )?;
     meta_db.save()?;

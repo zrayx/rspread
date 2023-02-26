@@ -14,10 +14,11 @@ use crate::common::{self, is_cell};
 use crate::editor::Editor;
 use crate::mode::Mode;
 use crate::pos::Pos;
+use crate::State;
 
-pub fn render(
+pub(crate) fn render(
     db: &Db,
-    table_name: &str,
+    state: &State,
     cursor: &Pos,
     mode: &Mode,
     editor: &Editor,
@@ -38,8 +39,9 @@ pub fn render(
     let margin_bottom: usize = 2; // room for status line+command line
     let terminal_width = termion::terminal_size().unwrap().0 as usize;
     let terminal_height = termion::terminal_size().unwrap().1 as usize;
-    let table_content = db.select_from(table_name).unwrap();
-    let mut column_names_extended = common::get_column_names_extended(db, table_name, cursor.x - 1);
+    let table_content = db.select_from(&state.table_name).unwrap();
+    let mut column_names_extended =
+        common::get_column_names_extended(db, &state.table_name, cursor.x - 1);
     for (idx, column_name) in &mut column_names_extended.iter_mut().enumerate() {
         if cursor.y != 0 || idx != cursor.x - 1 {
             if let Some(pos) = column_name.find('|') {
@@ -57,13 +59,13 @@ pub fn render(
     let line = if cursor.y == 0 {
         format!(
             "Table: {}, Cur: ({},{}), {}, {}",
-            table_name,
+            state.table_name,
             cursor.x,
             cursor.y,
             mode,
             column_names_extended[cursor.x - 1]
         )
-    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
+    } else if is_cell(db, state, cursor.x - 1, cursor.y - 1) {
         let cell = table_content[cursor.y - 1].select_at(cursor.x - 1).unwrap();
         let data_type_string = match cell {
             Data::Int(_) => "int",
@@ -76,12 +78,12 @@ pub fn render(
         };
         format!(
             "Table: {}, Cur: ({},{}), {}, {}:{}",
-            table_name, cursor.x, cursor.y, mode, data_type_string, cell
+            state.table_name, cursor.x, cursor.y, mode, data_type_string, cell
         )
     } else {
         format!(
             "Table: {}, Cur: ({},{}), {}",
-            table_name, cursor.x, cursor.y, mode
+            state.table_name, cursor.x, cursor.y, mode
         )
     };
     let line = line.chars().take(terminal_width).collect::<String>();

@@ -10,6 +10,7 @@ use crate::common;
 use crate::editor::Editor;
 use crate::mode::Mode;
 use crate::pos::Pos;
+use crate::State;
 
 fn move_cursor(cursor: &mut Pos, dx: i16, dy: i16) {
     let new_x = cursor.x as i16 + dx;
@@ -22,9 +23,9 @@ fn move_cursor(cursor: &mut Pos, dx: i16, dy: i16) {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn input(
+pub(crate) fn input(
     db: &rzdb::Db,
-    table_name: &str,
+    state: &State,
     cursor: &mut Pos,
     command: &mut Command,
     last_command: &mut Command,
@@ -65,10 +66,10 @@ pub fn input(
 
                 Key::Char('0') | Key::Home => cursor.x = 1,
                 Key::Char('$') | Key::End => {
-                    cursor.x = db.get_column_names(table_name).unwrap().len()
+                    cursor.x = db.get_column_names(&state.table_name).unwrap().len()
                 }
                 Key::Char('g') => cursor.y = 1,
-                Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
+                Key::Char('G') => cursor.y = db.select_from(&state.table_name).unwrap().len(),
 
                 Key::Char('<') => *command = Command::IndentLeft,
                 Key::Char('>') => *command = Command::IndentRight,
@@ -185,7 +186,7 @@ pub fn input(
                 Key::Ctrl('u') => move_cursor(cursor, 0, -(window_height - 5) / 2),
                 Key::Ctrl('d') => move_cursor(cursor, 0, (window_height - 5) / 2),
                 Key::Char('g') => cursor.y = 1,
-                Key::Char('G') => cursor.y = db.select_from(table_name).unwrap().len(),
+                Key::Char('G') => cursor.y = db.select_from(&state.table_name).unwrap().len(),
 
                 Key::Char('\n') => match *mode {
                     Mode::ListTables => *command = Command::ListTablesEnter,

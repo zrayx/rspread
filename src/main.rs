@@ -21,6 +21,7 @@ use mode::Mode;
 struct State {
     db_dir: String,
     db_name: String,
+    table_name: String,
 }
 
 fn main() {
@@ -32,7 +33,7 @@ fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let mut previous_table_name = ".clipboard".to_string();
     let (meta_db_dir, meta_db_name) = ("~/.local/rzdb".to_string(), ".meta".to_string());
-    let (db_dir, db_name, mut table_name) = match args.len() {
+    let (db_dir, db_name, table_name) = match args.len() {
         1 => (
             "~/.local/rzdb".to_string(),
             "rspread".to_string(),
@@ -64,7 +65,11 @@ fn main() {
         }
     };
 
-    let mut state = State { db_dir, db_name };
+    let mut state = State {
+        db_dir,
+        db_name,
+        table_name,
+    };
 
     // load meta database
     let mut meta_db = match Db::load(&meta_db_name, &meta_db_dir) {
@@ -85,7 +90,7 @@ fn main() {
         }
     };
 
-    meta::insert_recent_table(&mut meta_db, &state, &table_name).unwrap();
+    meta::insert_recent_table(&mut meta_db, &state).unwrap();
 
     // If the database doesn't exist, create it
     // If there was an error, e. g. parsing, exit
@@ -107,10 +112,10 @@ fn main() {
         }
     };
 
-    if !db.exists(&table_name) {
-        db.create_table(&table_name).unwrap();
-        db.create_column(&table_name, "date").unwrap();
-        db.create_column(&table_name, "topic").unwrap();
+    if !db.exists(&state.table_name) {
+        db.create_table(&state.table_name).unwrap();
+        db.create_column(&state.table_name, "date").unwrap();
+        db.create_column(&state.table_name, "topic").unwrap();
     };
 
     // setup inotify for db_dir (reload database on change)
@@ -143,14 +148,7 @@ fn main() {
     let mut editor = editor::Editor::new();
     loop {
         // render screen
-        render::render(
-            &db,
-            &table_name,
-            &cursor,
-            &mode,
-            &editor,
-            &status_line_message,
-        );
+        render::render(&db, &state, &cursor, &mode, &editor, &status_line_message);
 
         // reset error message display
         if mode == Mode::Error {
@@ -160,7 +158,7 @@ fn main() {
         // get user input
         input(
             &db,
-            &table_name,
+            &state,
             &mut cursor,
             &mut command,
             &mut last_command,
@@ -186,9 +184,9 @@ fn main() {
             Command::Quit => break,
             Command::None => {}
             Command::PreviousFile => {
-                if previous_table_name != table_name {
-                    let tmp = table_name;
-                    table_name = previous_table_name.clone();
+                if previous_table_name != state.table_name {
+                    let tmp = state.table_name;
+                    state.table_name = previous_table_name.clone();
                     previous_table_name = tmp;
                     cursor = pos::Pos::new(1, 1);
                     renew_watch_descriptor!();
@@ -196,11 +194,11 @@ fn main() {
             }
             Command::InsertStart => {
                 mode = Mode::Insert;
-                common::editor_enter(&db, &table_name, &cursor, &mut editor, 0);
+                common::editor_enter(&db, &state, &cursor, &mut editor, 0);
             }
             Command::InsertEnd => {
                 mode = Mode::Insert;
-                editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                editor_enter(&db, &state, &cursor, &mut editor, -1);
             }
             Command::ChangeCell => {
                 mode = Mode::Insert;
@@ -213,9 +211,7 @@ fn main() {
             | Command::EditorExitRight
             | Command::EditorNewLine => {
                 mode = Mode::Normal;
-                if let Err(e) =
-                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
-                {
+                if let Err(e) = editor_exit(&mut db, &state, &mut mode, &mut cursor, &mut editor) {
                     set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                 }
                 if command != Command::EditorExit {
@@ -228,28 +224,29 @@ fn main() {
                     } else if command == Command::EditorExitDown {
                         cursor.y += 1;
                     } else if command == Command::EditorNewLine && cursor.y > 0 {
-                        if let Err(e) = db.insert_empty_row_at(&table_name, cursor.y) {
+                        if let Err(e) = db.insert_empty_row_at(&state.table_name, cursor.y) {
                             set_error_message(&e.to_string(), &mut status_line_message, &mut mode);
                         }
                         // set old_text to the cell's contents, or output error message
-                        let old_text = match db.select_at(&table_name, cursor.x - 1, cursor.y - 1) {
-                            Ok(cell) => cell.to_string(),
-                            Err(e) => {
-                                set_error_message(
-                                    &e.to_string(),
-                                    &mut status_line_message,
-                                    &mut mode,
-                                );
-                                String::new()
-                            }
-                        };
+                        let old_text =
+                            match db.select_at(&state.table_name, cursor.x - 1, cursor.y - 1) {
+                                Ok(cell) => cell.to_string(),
+                                Err(e) => {
+                                    set_error_message(
+                                        &e.to_string(),
+                                        &mut status_line_message,
+                                        &mut mode,
+                                    );
+                                    String::new()
+                                }
+                            };
 
                         let leading_spaces = old_text.chars().take_while(|c| *c == ' ').count();
                         cursor.y += 1;
                         // Set cell to the leading spaces of the old cell
                         let spaces = " ".repeat(leading_spaces);
                         if let Err(e) = db.set_at(
-                            &table_name,
+                            &state.table_name,
                             cursor.y - 1,
                             cursor.x - 1,
                             Data::String(spaces),
@@ -261,7 +258,7 @@ fn main() {
                         mode = Mode::Normal;
                     } else {
                         mode = Mode::Insert;
-                        editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                        editor_enter(&db, &state, &cursor, &mut editor, -1);
                     }
                 }
             }
@@ -277,16 +274,16 @@ fn main() {
                         "e" => {
                             load_table(
                                 &mut args,
-                                &mut table_name,
+                                &mut state,
                                 &mut previous_table_name,
                                 &mut cursor,
                                 &mut db,
                                 &mut editor,
                             );
-                            meta::insert_recent_table(&mut meta_db, &state, &table_name).unwrap();
+                            meta::insert_recent_table(&mut meta_db, &state).unwrap();
                         }
                         "ls" => list_tables(
-                            &mut table_name,
+                            &mut state,
                             &mut previous_table_name,
                             &mut cursor,
                             &mut db,
@@ -294,7 +291,7 @@ fn main() {
                         ),
                         "lsdb" => {
                             list_databases(
-                                &mut table_name,
+                                &mut state,
                                 &mut previous_table_name,
                                 &mut cursor,
                                 &mut db,
@@ -307,7 +304,7 @@ fn main() {
                             if let Err(msg) = drop_table(
                                 args,
                                 &mut db,
-                                &mut table_name,
+                                &mut state,
                                 &mut previous_table_name,
                                 &mut cursor,
                                 &mut mode,
@@ -316,7 +313,7 @@ fn main() {
                             } else {
                                 consume_inotify_events(&mut inotify, buffer);
                             }
-                            meta::insert_recent_table(&mut meta_db, &state, &table_name).unwrap();
+                            meta::insert_recent_table(&mut meta_db, &state).unwrap();
                         }
                         "cd" => {
                             if let Some(arg1) = args.next() {
@@ -328,7 +325,7 @@ fn main() {
                                 }
                                 load_database(&state, &mut db, &mut status_line_message, &mut mode);
                                 list_tables(
-                                    &mut table_name,
+                                    &mut state,
                                     &mut previous_table_name,
                                     &mut cursor,
                                     &mut db,
@@ -347,16 +344,16 @@ fn main() {
                             let new_table_name = ".".to_string();
                             set_table(
                                 &new_table_name,
-                                &mut table_name,
+                                &mut state,
                                 &mut previous_table_name,
                                 &mut cursor,
                             );
-                            db.create_or_replace_table(&table_name).unwrap();
-                            db.create_column(&table_name, "name").unwrap();
-                            db.create_column(&table_name, "value").unwrap();
-                            db.insert(&table_name, vec!["database path", &state.db_dir])
+                            db.create_or_replace_table(&state.table_name).unwrap();
+                            db.create_column(&state.table_name, "name").unwrap();
+                            db.create_column(&state.table_name, "value").unwrap();
+                            db.insert(&state.table_name, vec!["database path", &state.db_dir])
                                 .unwrap();
-                            db.insert(&table_name, vec!["database name", &state.db_name])
+                            db.insert(&state.table_name, vec!["database name", &state.db_name])
                                 .unwrap();
                             mode = Mode::ListReadOnly;
                         }
@@ -376,7 +373,7 @@ fn main() {
             }
             Command::ListTablesEnter | Command::ListDatabasesEnter => {
                 if cursor.y > 0 {
-                    if let Ok(selected_name) = db.select_at(&table_name, 0, cursor.y - 1) {
+                    if let Ok(selected_name) = db.select_at(&state.table_name, 0, cursor.y - 1) {
                         let new_name = selected_name.to_string();
                         if new_name != "." {
                             match command {
@@ -389,7 +386,7 @@ fn main() {
                                         &mut mode,
                                     );
                                     list_tables(
-                                        &mut table_name,
+                                        &mut state,
                                         &mut previous_table_name,
                                         &mut cursor,
                                         &mut db,
@@ -400,13 +397,12 @@ fn main() {
                                 Command::ListTablesEnter => {
                                     set_table(
                                         &new_name,
-                                        &mut table_name,
+                                        &mut state,
                                         &mut previous_table_name,
                                         &mut cursor,
                                     );
                                     mode = Mode::Normal;
-                                    meta::insert_recent_table(&mut meta_db, &state, &table_name)
-                                        .unwrap();
+                                    meta::insert_recent_table(&mut meta_db, &state).unwrap();
                                 }
                                 _ => unreachable!(),
                             }
@@ -416,9 +412,9 @@ fn main() {
             }
             Command::PasteToday => {
                 if cursor.y > 0 {
-                    extend_table(&mut db, &table_name, cursor.x, cursor.y).unwrap();
+                    extend_table(&mut db, &state.table_name, cursor.x, cursor.y).unwrap();
                     db.set_at(
-                        &table_name,
+                        &state.table_name,
                         cursor.y - 1,
                         cursor.x - 1,
                         Data::Date(Date::today()),
@@ -427,30 +423,31 @@ fn main() {
                 }
             }
             Command::InsertEmptyColumn => {
-                let mut column_count = db.get_column_count(&table_name).unwrap();
+                let mut column_count = db.get_column_count(&state.table_name).unwrap();
                 while column_count < cursor.x {
                     db.create_column(
-                        &table_name,
-                        &generate_column_name(&db, &table_name, column_count),
+                        &state.table_name,
+                        &generate_column_name(&db, &state.table_name, column_count),
                     )
                     .unwrap();
                     column_count += 1;
                 }
                 db.insert_column_at(
-                    &table_name,
-                    &generate_column_name(&db, &table_name, cursor.x),
+                    &state.table_name,
+                    &generate_column_name(&db, &state.table_name, cursor.x),
                     cursor.x - 1,
                 )
                 .unwrap();
             }
             Command::InsertEmptyRowAbove => {
-                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
-                    db.insert_empty_row_at(&table_name, cursor.y - 1).unwrap();
+                if cursor.y > 0 && is_cell(&db, &state, 0, cursor.y - 1) {
+                    db.insert_empty_row_at(&state.table_name, cursor.y - 1)
+                        .unwrap();
                 }
             }
             Command::InsertEmptyRowBelow => {
-                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y) {
-                    db.insert_empty_row_at(&table_name, cursor.y).unwrap();
+                if cursor.y > 0 && is_cell(&db, &state, 0, cursor.y) {
+                    db.insert_empty_row_at(&state.table_name, cursor.y).unwrap();
                 }
                 cursor.y += 1;
             }
@@ -464,25 +461,28 @@ fn main() {
                         end_y: y + 1,
                     },
                     &mut db,
-                    &table_name,
+                    &state,
                     clipboard_table_name,
                     &mut clipboard,
                 );
                 if cursor.y > 0 {
-                    if is_cell(&db, &table_name, cursor.x - 1, cursor.y - 1) {
-                        db.set_at(&table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
+                    if is_cell(&db, &state, cursor.x - 1, cursor.y - 1) {
+                        db.set_at(&state.table_name, cursor.y - 1, cursor.x - 1, Data::Empty)
                             .unwrap();
                     }
                 } else {
-                    let old_column_name = db.get_column_name_at(&table_name, cursor.x - 1).unwrap();
-                    let generic_column_name = generate_column_name(&db, &table_name, cursor.x - 1);
-                    db.rename_column(&table_name, &old_column_name, &generic_column_name)
+                    let old_column_name = db
+                        .get_column_name_at(&state.table_name, cursor.x - 1)
+                        .unwrap();
+                    let generic_column_name =
+                        generate_column_name(&db, &state.table_name, cursor.x - 1);
+                    db.rename_column(&state.table_name, &old_column_name, &generic_column_name)
                         .unwrap();
                 }
             }
             Command::DeleteLine => {
-                if cursor.y > 0 && is_cell(&db, &table_name, 0, cursor.y - 1) {
-                    let num_columns = db.get_column_count(&table_name).unwrap();
+                if cursor.y > 0 && is_cell(&db, &state, 0, cursor.y - 1) {
+                    let num_columns = db.get_column_count(&state.table_name).unwrap();
                     yank(
                         Rect {
                             start_x: 1,
@@ -491,19 +491,19 @@ fn main() {
                             end_y: cursor.y + 1,
                         },
                         &mut db,
-                        &table_name,
+                        &state,
                         clipboard_table_name,
                         &mut clipboard,
                     );
-                    db.delete_row_at(&table_name, cursor.y - 1).unwrap();
+                    db.delete_row_at(&state.table_name, cursor.y - 1).unwrap();
                 }
-                if cursor.y > 1 && cursor.y > db.get_row_count(&table_name).unwrap() {
+                if cursor.y > 1 && cursor.y > db.get_row_count(&state.table_name).unwrap() {
                     cursor.y -= 1;
                 }
             }
             Command::DeleteColumn => {
-                if is_cell(&db, &table_name, cursor.x - 1, 0) {
-                    let num_rows = db.get_row_count(&table_name).unwrap();
+                if is_cell(&db, &state, cursor.x - 1, 0) {
+                    let num_rows = db.get_row_count(&state.table_name).unwrap();
                     yank(
                         Rect {
                             start_x: cursor.x,
@@ -512,28 +512,27 @@ fn main() {
                             end_y: num_rows,
                         },
                         &mut db,
-                        &table_name,
+                        &state,
                         clipboard_table_name,
                         &mut clipboard,
                     );
                     db.delete_column(
-                        &table_name,
-                        &db.get_column_name_at(&table_name, cursor.x - 1).unwrap(),
+                        &state.table_name,
+                        &db.get_column_name_at(&state.table_name, cursor.x - 1)
+                            .unwrap(),
                     )
                     .unwrap();
                 }
             }
 
             Command::IndentLeft | Command::IndentRight => {
-                editor_enter(&db, &table_name, &cursor, &mut editor, -1);
+                editor_enter(&db, &state, &cursor, &mut editor, -1);
                 if command == Command::IndentLeft {
                     editor.indent_left();
                 } else {
                     editor.indent_right();
                 }
-                if let Err(e) =
-                    editor_exit(&mut db, &table_name, &mut mode, &mut cursor, &mut editor)
-                {
+                if let Err(e) = editor_exit(&mut db, &state, &mut mode, &mut cursor, &mut editor) {
                     set_error_message(
                         &format!("Error in indentation: {}", e),
                         &mut status_line_message,
@@ -547,7 +546,7 @@ fn main() {
                     Command::YankCell => (cursor.x, cursor.x + 1, cursor.y, cursor.y + 1),
                     Command::YankRow => (
                         1,
-                        db.get_column_count(&table_name).unwrap() + 1,
+                        db.get_column_count(&state.table_name).unwrap() + 1,
                         cursor.y,
                         cursor.y + 1,
                     ),
@@ -555,7 +554,7 @@ fn main() {
                         cursor.x,
                         cursor.x + 1,
                         1,
-                        db.get_row_count(&table_name).unwrap() + 1,
+                        db.get_row_count(&state.table_name).unwrap() + 1,
                     ),
                     _ => unreachable!(),
                 };
@@ -567,18 +566,14 @@ fn main() {
                         end_y,
                     },
                     &mut db,
-                    &table_name,
+                    &state,
                     clipboard_table_name,
                     &mut clipboard,
                 )
             }
-            Command::PasteReplace | Command::PasteBefore | Command::PasteAfter => paste(
-                &mut db,
-                &table_name,
-                clipboard_table_name,
-                &mut cursor,
-                &command,
-            ),
+            Command::PasteReplace | Command::PasteBefore | Command::PasteAfter => {
+                paste(&mut db, &state, clipboard_table_name, &mut cursor, &command)
+            }
         }
 
         if let Err(e) = db.save() {

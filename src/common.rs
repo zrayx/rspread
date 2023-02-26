@@ -2,6 +2,7 @@ use crate::command::Command;
 use crate::editor;
 use crate::mode::Mode;
 use crate::pos::{self, Pos};
+use crate::State;
 use rzdb::{Data, Db};
 
 pub struct Rect {
@@ -11,8 +12,9 @@ pub struct Rect {
     pub end_y: usize,
 }
 
-pub(crate) fn is_cell(db: &Db, table_name: &str, x: usize, y: usize) -> bool {
-    x < db.get_column_count(table_name).unwrap() && y < db.get_row_count(table_name).unwrap()
+pub(crate) fn is_cell(db: &Db, state: &State, x: usize, y: usize) -> bool {
+    x < db.get_column_count(&state.table_name).unwrap()
+        && y < db.get_row_count(&state.table_name).unwrap()
 }
 
 pub(crate) fn get_column_names_extended(db: &Db, table_name: &str, x: usize) -> Vec<String> {
@@ -50,23 +52,22 @@ pub(crate) fn set_error_message(new_message: &str, message: &mut String, mode: &
 
 pub(crate) fn set_table(
     new_table_name: &str,
-    table_name: &mut String,
+    state: &mut State,
     previous_table_name: &mut String,
     cursor: &mut Pos,
 ) {
-    *previous_table_name = table_name.clone();
-    *table_name = new_table_name.to_string();
+    *previous_table_name = state.table_name.clone();
+    state.table_name = new_table_name.to_string();
     *cursor = Pos::new(1, 1);
 }
 
 pub(crate) fn load_database(
-    db_name: &str,
-    db_dir: &str,
+    state: &State,
     db: &mut Db,
     status_line_message: &mut String,
     mode: &mut Mode,
 ) {
-    let e = Db::load(db_name, db_dir);
+    let e = Db::load(&state.db_name, &state.db_dir);
     match e {
         Ok(d) => *db = d,
         Err(e) => {
@@ -74,7 +75,7 @@ pub(crate) fn load_database(
             // return new database if it doesn't exist
             if let Some(std_io_error) = e.downcast_ref::<std::io::Error>() {
                 if std_io_error.kind() == std::io::ErrorKind::NotFound {
-                    message = format!("Database {} does not exist", db_name);
+                    message = format!("Database {} does not exist", state.db_name);
                 }
             }
             set_error_message(&message, status_line_message, mode);
@@ -84,7 +85,7 @@ pub(crate) fn load_database(
 
 pub(crate) fn load_table(
     args: &mut std::str::SplitWhitespace,
-    table_name: &mut String,
+    state: &mut State,
     previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
@@ -93,9 +94,9 @@ pub(crate) fn load_table(
     if let Some(arg1) = args.next() {
         // set table_name to new arg
         let new_table_name = arg1.to_string();
-        set_table(&new_table_name, table_name, previous_table_name, cursor);
-        if !db.exists(&*table_name) {
-            db.create_table(&*table_name).unwrap();
+        set_table(&new_table_name, state, previous_table_name, cursor);
+        if !db.exists(&state.table_name) {
+            db.create_table(&state.table_name).unwrap();
         }
         editor.clear();
         *cursor = pos::Pos::new(1, 1);
@@ -105,7 +106,7 @@ pub(crate) fn load_table(
 pub(crate) fn drop_table(
     mut args: std::str::SplitWhitespace,
     db: &mut Db,
-    table_name: &mut String,
+    state: &mut State,
     previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     mode: &mut Mode,
@@ -115,7 +116,7 @@ pub(crate) fn drop_table(
         if db.drop_table(&name).is_err() {
             return Err(format!("Table {} does not exist", name));
         }
-        list_tables(table_name, previous_table_name, cursor, db, mode);
+        list_tables(state, previous_table_name, cursor, db, mode);
         Ok(())
     } else {
         Err("No table name given".to_string())
@@ -123,41 +124,41 @@ pub(crate) fn drop_table(
 }
 
 pub(crate) fn list_tables(
-    table_name: &mut String,
+    state: &mut State,
     previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
     mode: &mut Mode,
 ) {
     let new_table_name = ".".to_string();
-    set_table(&new_table_name, table_name, previous_table_name, cursor);
-    db.create_or_replace_table(&*table_name).unwrap();
-    db.create_column(&*table_name, "name").unwrap();
+    set_table(&new_table_name, state, previous_table_name, cursor);
+    db.create_or_replace_table(&state.table_name).unwrap();
+    db.create_column(&state.table_name, "name").unwrap();
     let mut table_names = db.get_table_names();
     table_names.sort();
     for table in table_names {
         if &table != "." {
-            db.insert(&*table_name, vec![&table]).unwrap();
+            db.insert(&state.table_name, vec![&table]).unwrap();
         }
     }
     *mode = Mode::ListTables;
 }
 
 pub(crate) fn list_databases(
-    table_name: &mut String,
+    state: &mut State,
     previous_table_name: &mut String,
     cursor: &mut pos::Pos,
     db: &mut Db,
     mode: &mut Mode,
 ) {
     let new_table_name = ".".to_string();
-    set_table(&new_table_name, table_name, previous_table_name, cursor);
-    db.create_or_replace_table(&*table_name).unwrap();
-    db.create_column(&*table_name, "name").unwrap();
+    set_table(&new_table_name, state, previous_table_name, cursor);
+    db.create_or_replace_table(&state.table_name).unwrap();
+    db.create_column(&state.table_name, "name").unwrap();
     let mut database_names = db.get_database_names().unwrap();
     database_names.sort();
     for database in database_names {
-        db.insert(&*table_name, vec![&database]).unwrap();
+        db.insert(&state.table_name, vec![&database]).unwrap();
     }
     *mode = Mode::ListDatabases;
 }
@@ -183,20 +184,21 @@ pub(crate) fn extend_table(
 
 pub(crate) fn editor_enter(
     db: &Db,
-    table_name: &str,
+    state: &State,
     cursor: &pos::Pos,
     editor: &mut editor::Editor,
     cursor_x: i32,
 ) {
-    let column_count = db.get_column_count(table_name).unwrap();
+    let column_count = db.get_column_count(&state.table_name).unwrap();
     let old_text = if cursor.y == 0 {
         if cursor.x > column_count {
-            generate_column_name(db, table_name, cursor.x)
+            generate_column_name(db, &state.table_name, cursor.x)
         } else {
-            db.get_column_name_at(table_name, cursor.x - 1).unwrap()
+            db.get_column_name_at(&state.table_name, cursor.x - 1)
+                .unwrap()
         }
-    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
-        db.select_at(table_name, cursor.x - 1, cursor.y - 1)
+    } else if is_cell(db, state, cursor.x - 1, cursor.y - 1) {
+        db.select_at(&state.table_name, cursor.x - 1, cursor.y - 1)
             .unwrap()
             .no_time_seconds()
     } else {
@@ -216,26 +218,26 @@ pub(crate) fn editor_enter(
 
 pub(crate) fn editor_exit(
     db: &mut Db,
-    table_name: &str,
+    state: &State,
     mode: &mut Mode,
     cursor: &mut pos::Pos,
     editor: &mut editor::Editor,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !editor.get_line().is_empty() {
-        extend_table(db, table_name, cursor.x, cursor.y)?;
+        extend_table(db, &state.table_name, cursor.x, cursor.y)?;
     }
     let new_line = editor.get_line();
     editor.clear(); // make sure to clear editor even if we quit with an error
     if cursor.y == 0 {
         // column name
-        let old_column_name = get_column_name_or_generic(cursor.x, db, table_name);
+        let old_column_name = get_column_name_or_generic(cursor.x, db, &state.table_name);
         let new_column_name = new_line;
         if old_column_name != new_column_name {
-            db.rename_column(table_name, &old_column_name, &new_column_name)?;
+            db.rename_column(&state.table_name, &old_column_name, &new_column_name)?;
         }
-    } else if is_cell(db, table_name, cursor.x - 1, cursor.y - 1) {
+    } else if is_cell(db, state, cursor.x - 1, cursor.y - 1) {
         db.set_at(
-            table_name,
+            &state.table_name,
             cursor.y - 1,
             cursor.x - 1,
             Data::parse(&new_line),
@@ -250,23 +252,23 @@ pub(crate) fn editor_exit(
 pub(crate) fn yank(
     r: Rect,
     db: &mut Db,
-    table_name: &str,
+    state: &State,
     clipboard_table_name: &str,
     clipboard: &mut arboard::Clipboard,
 ) {
     if r.start_y == 0 && r.end_y == 1 {
-        let column_name = get_column_name_or_generic(r.start_x, &*db, table_name);
+        let column_name = get_column_name_or_generic(r.start_x, &*db, &state.table_name);
         db.create_or_replace_table(clipboard_table_name).unwrap();
         db.create_column(clipboard_table_name, &column_name)
             .unwrap();
         db.insert(clipboard_table_name, vec![&column_name]).unwrap();
     } else {
-        let columns = db.get_column_names(table_name).unwrap();
+        let columns = db.get_column_names(&state.table_name).unwrap();
         let v2: Vec<&str> = columns.iter().map(|s| &**s).collect();
 
         db.select_into(
             clipboard_table_name,
-            table_name,
+            &state.table_name,
             &v2[(r.start_x - 1)..(r.end_x - 1)],
             r.start_y - 1,
             r.end_y - 1,
@@ -302,15 +304,15 @@ fn clipboard_to_clipboard(
 #[allow(unused_variables)]
 pub(crate) fn paste(
     db: &mut Db,
-    table_name: &str,
+    state: &State,
     clipboard_table_name: &str,
     cursor: &mut pos::Pos,
     command: &Command,
 ) {
     let clip_rows_num = db.get_row_count(clipboard_table_name).unwrap();
     let clip_cols_num = db.get_column_count(clipboard_table_name).unwrap();
-    let table_rows_num = db.get_row_count(table_name).unwrap();
-    let table_cols_num = db.get_column_count(table_name).unwrap();
+    let table_rows_num = db.get_row_count(&state.table_name).unwrap();
+    let table_cols_num = db.get_column_count(&state.table_name).unwrap();
 
     let paste_overwrite_cells = *command == Command::PasteReplace;
     let paste_insert_cells = !paste_overwrite_cells;
@@ -324,10 +326,13 @@ pub(crate) fn paste(
     if paste_column_header {
         if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
             let new_name = cell_data.to_string();
-            let old_name = db.get_column_name_at(table_name, cursor.x - 1).unwrap();
-            let check_columns = db.get_column_names(table_name).unwrap();
+            let old_name = db
+                .get_column_name_at(&state.table_name, cursor.x - 1)
+                .unwrap();
+            let check_columns = db.get_column_names(&state.table_name).unwrap();
             let new_name = generate_nice_copy_name(&new_name, check_columns);
-            db.rename_column(table_name, &old_name, &new_name).unwrap();
+            db.rename_column(&state.table_name, &old_name, &new_name)
+                .unwrap();
         }
         return;
     }
@@ -345,26 +350,33 @@ pub(crate) fn paste(
     // TODO: paste all data, not only one cell
     if paste_overwrite_cells {
         if let Ok(cell_data) = db.select_at(clipboard_table_name, 0, 0) {
-            extend_table(db, table_name, end_x, end_y).unwrap();
-            db.set_at(table_name, start_y, start_x, cell_data).unwrap();
+            extend_table(db, &state.table_name, end_x, end_y).unwrap();
+            db.set_at(&state.table_name, start_y, start_x, cell_data)
+                .unwrap();
         }
     } else if insert_rows {
-        let table_column_count = db.get_column_count(table_name).unwrap();
+        let table_column_count = db.get_column_count(&state.table_name).unwrap();
         let clipboard_column_count = db.get_column_count(clipboard_table_name).unwrap();
         if cursor.y > table_rows_num {
-            extend_table(db, table_name, 0, cursor.y - 1 + usize::from(insert_after)).unwrap();
+            extend_table(
+                db,
+                &state.table_name,
+                0,
+                cursor.y - 1 + usize::from(insert_after),
+            )
+            .unwrap();
         }
-        extend_table(db, table_name, clipboard_column_count, 0).unwrap();
+        extend_table(db, &state.table_name, clipboard_column_count, 0).unwrap();
         extend_table(db, clipboard_table_name, table_column_count, 0).unwrap();
-        db.insert_into_at(clipboard_table_name, table_name, start_y)
+        db.insert_into_at(clipboard_table_name, &state.table_name, start_y)
             .unwrap();
     } else if insert_columns {
         let clipboard_row_count = db.get_row_count(clipboard_table_name).unwrap();
-        let table_row_count = db.get_row_count(table_name).unwrap();
-        extend_table(db, table_name, 0, clipboard_row_count).unwrap();
+        let table_row_count = db.get_row_count(&state.table_name).unwrap();
+        extend_table(db, &state.table_name, 0, clipboard_row_count).unwrap();
         extend_table(db, clipboard_table_name, 0, table_row_count).unwrap();
         // make sure column names are unique
-        let table_columns = db.get_column_names(table_name).unwrap();
+        let table_columns = db.get_column_names(&state.table_name).unwrap();
         let mut clipboard_columns = db.get_column_names(clipboard_table_name).unwrap();
         let old_clipboard_columns = clipboard_columns.clone();
         let mut new_column_names = vec![];
@@ -388,7 +400,7 @@ pub(crate) fn paste(
             }
         }
 
-        db.insert_columns_at(clipboard_table_name, table_name, start_x)
+        db.insert_columns_at(clipboard_table_name, &state.table_name, start_x)
             .unwrap();
 
         if insert_after {
